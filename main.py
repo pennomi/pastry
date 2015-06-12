@@ -16,11 +16,15 @@ class DistributedPerson(DistributedObject):
 
 
 class MyClient(Client):
-    pass
+    def __init__(self):
+        super().__init__()
+        self.register_channel("zone-1")
+        self.register_channel("zone-2")
 
 
 class MyAI(AI):
     def __init__(self):
+        super().__init__()
         bill = DistributedPerson(first_name="Bill", last_name="Kerman", age=1)
         self.create_object(bill)
         bill.save()

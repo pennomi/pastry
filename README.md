@@ -1,11 +1,11 @@
 Pastry is a DistributedObject architecture that makes creating MMO games easy as pie!
 
 Here's some architecture inspiration material:
-http://www.youtube.com/watch?v=JsgCFVpXQtQ
-http://www.youtube.com/watch?v=r_ZP9SInPcs
-http://www.youtube.com/watch?v=SzybRdxjYoA
-http://twvideo01.ubm-us.net/o1/vault/gdconline10/slides/11516-MMO_101_Building_Disneys_Sever.pdf
-http://dl.acm.org/citation.cfm?id=950566.950589
+
+ * [Video: Distributed Objects - Client](http://www.youtube.com/watch?v=JsgCFVpXQtQ)
+ * [Video: Distributed Objects - Server](http://www.youtube.com/watch?v=r_ZP9SInPcs)
+ * [Video: Server Architecture](http://www.youtube.com/watch?v=SzybRdxjYoA)
+ * [Slides: Server Architecture](http://twvideo01.ubm-us.net/o1/vault/gdconline10/slides/11516-MMO_101_Building_Disneys_Sever.pdf)
 
 DistributedObject class:
 
@@ -41,7 +41,7 @@ OTP Server:
 
  * Relays message back and forth. Handles "interest"
  * Components:
-    * Msg Director (sends messages)
+    * Message Director (sends messages)
     * State Server (persists objects in memory)
     * DB (non-volatile persistence)
     * Client Agent (?)
@@ -63,6 +63,7 @@ AI:
 
  * Privileged Client. Probably subclasses that?
  * Basically IS the game logic
+ * Generally has exactly one interest - everything within the zone
  * One AI per zone. Or could there be more? Need at least one.
 
 Client:
