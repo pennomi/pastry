@@ -1,43 +1,48 @@
 """
 Pastry is a DistributedObject architecture that makes creating MMO games easy as pie!
 """
+import asyncio
 import sys
-from base import DistributedObject, AI, Client, StateServer
+from agent import PubSubAgent
+from client import PubSubClient
 
 
-class DistributedPerson(DistributedObject):
-    first_name = ""
-    last_name = ""
-    age = 0
+class HeartbeatClient(PubSubClient):
+    def setup(self):
+        self.subscribe("zone-1")
+        self.subscribe("zone-2")
+        asyncio.async(self.heartbeat(), loop=self._loop)
 
-    @property
-    def name(self):
-        return "{} {}".format(self.first_name, self.last_name)
+    @asyncio.coroutine
+    def heartbeat(self):
+        while not self.finished:
+            self._send("Heartbeat")
+            yield from asyncio.sleep(1.0)
+
+    def handle_message(self, data):
+        print('Receiving:', data)
 
 
-class MyClient(Client):
-    def __init__(self):
-        super().__init__()
-        self.register_channel("zone-1")
-        self.register_channel("zone-2")
+class TestAgent(PubSubAgent):
+    def authenticate(self, *args, **kwargs):
+        return True
 
-
-class MyAI(AI):
-    def __init__(self):
-        super().__init__()
-        bill = DistributedPerson(first_name="Bill", last_name="Kerman", age=1)
-        self.create_object(bill)
-        bill.save()
+    @asyncio.coroutine
+    def handle_message(self, sender, data):
+        message = data.decode('utf8')
+        # Subscription requests are already handled; must be a
+        # DistributedObject create/update.
+        # TODO: Check that said DO is allowed to be created/updated
+        print("Handle {} from {}".format(data, sender))
+        yield from self.broadcast("channel will go here", data)
 
 
 if __name__ == "__main__":
     thing = sys.argv[1]  # python main.py FOO
-    if thing == 'server':
-        to_start = StateServer()
+    if thing == 'agent':
+        to_start = TestAgent()
     elif thing == 'client':
-        to_start = MyClient()
-    elif thing == 'ai':
-        to_start = MyAI()
+        to_start = HeartbeatClient()
     else:
         raise ValueError('Must be server, client or ai')
     to_start.run()
