@@ -26,18 +26,10 @@ class PubSubAgent(RedisServer):
     connections = []
     finished = False
 
-    # TODO: necessary functions
-    # receive message from redis (then forward it to the right people)
-    # handle a subscription
-    # handle an unsubscription
-
     def authenticate(self, *args, **kwargs) -> bool:
         raise NotImplementedError()
 
-    def handle_message(self, sender: ClientConnection, data: bytes):
-        raise NotImplementedError()
-
-    def handle_redis_message(self, message):
+    def handle_client_message(self, sender: ClientConnection, data: bytes):
         raise NotImplementedError()
 
     def run(self):
@@ -97,18 +89,22 @@ class PubSubAgent(RedisServer):
                 print("Subscribing", sender, "to", d)
                 # TODO: Hang up on any requests that aren't permitted
                 sender.subscriptions.append(message[4:])
+                self.register_channel(message[4:])
                 # TODO: Sync the state of the subscription down
             # Unsubscription request. No permission necessary.
             elif message.startswith('unsub:'):
                 print("Unsubscribing", sender, "from", d)
                 # TODO: Don't crash if it's not in the list
                 sender.subscriptions.remove(message[6:])
+                # TODO: Check all subscriptions to see if this is needed any
+                # more. Others might still be using it!
+                self.unregister_channel(message[6:])
             else:
                 # This is a non-pubsub message; forward to the subclass
-                yield from self.handle_message(sender, d)
+                yield from self.handle_client_message(sender, d)
 
     @asyncio.coroutine
-    def broadcast(self, channel: str, data: bytes):
+    def broadcast_to_clients(self, channel: str, data: bytes):
         # TODO: Handle channels
         print("Sending: {} to {} connections".format(
             data, len(self.connections)))

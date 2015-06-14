@@ -14,7 +14,7 @@ class RedisServer:
         # TODO: Maybe have 2 channels: `public` and `internal`
         self.loop = asyncio.get_event_loop()
 
-    def handle_redis_message(self, message: str):
+    def handle_redis_message(self, channel: str, message: str):
         raise NotImplementedError()
 
     def redis_broadcast(self, channel, message):
@@ -33,8 +33,9 @@ class RedisServer:
     def _redis_listen(self):
         # TODO: Check if there's a better pattern for this
         message = self._pubsub.get_message()
-        if message:
-            self.handle_redis_message(message)
+        if message and not message['type'] == 'psubscribe':
+            self.handle_redis_message(message['channel'].decode('utf8'),
+                                      message['data'].decode('utf8'))
         self.loop.call_later(0.001, self._redis_listen)
 
     def run(self):
