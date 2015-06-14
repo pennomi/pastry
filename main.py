@@ -5,6 +5,7 @@ import asyncio
 import sys
 from agent import PubSubAgent
 from client import PubSubClient
+from zone import ZoneServer
 
 
 class HeartbeatClient(PubSubClient):
@@ -27,6 +28,11 @@ class TestAgent(PubSubAgent):
     def authenticate(self, *args, **kwargs):
         return True
 
+    def handle_redis_message(self, message):
+        print("Received (redis):", message)
+        print("Echoing down to everyone...")
+        self.broadcast("global", message)
+
     @asyncio.coroutine
     def handle_message(self, sender, data):
         message = data.decode('utf8')
@@ -35,6 +41,13 @@ class TestAgent(PubSubAgent):
         # TODO: Check that said DO is allowed to be created/updated
         print("Handle {} from {}".format(data, sender))
         yield from self.broadcast("channel will go here", data)
+
+
+class HeartbeatZone(ZoneServer):
+    zone_id = "zone-1"
+
+    def handle_redis_message(self, message):
+        print("I got a message:", message)
 
 
 if __name__ == "__main__":

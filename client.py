@@ -68,7 +68,7 @@ class PubSubClient():
 
     def _send(self, data):
         print('Sending:', data)
-        self._writer.write(data.encode())
+        self._writer.write(data.encode() + b"\n")
 
     @asyncio.coroutine
     def close(self):

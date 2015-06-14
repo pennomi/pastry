@@ -1,4 +1,5 @@
 import asyncio
+from base import RedisServer
 from settings import MAX_PACKET_SIZE
 
 
@@ -14,14 +15,14 @@ class ClientConnection:
         return "<Client {}>".format(self.writer.get_extra_info('peername'))
 
 
-class PubSubAgent():
+class PubSubAgent(RedisServer):
     """The agent is the secure gateway through which the client connects to
     the full system.
 
     On one side a secure TCP socket talks to the client, and on the other side
     a Redis pubsub connection speaks with the entire internal network.
     """
-    _loop = None
+    loop = None
     connections = []
     finished = False
 
@@ -36,23 +37,22 @@ class PubSubAgent():
     def handle_message(self, sender: ClientConnection, data: bytes):
         raise NotImplementedError()
 
+    def handle_redis_message(self, message):
+        raise NotImplementedError()
+
     def run(self):
-        self._loop = asyncio.get_event_loop()
         coroutine = asyncio.start_server(
-            self.create_client_connection, '127.0.0.1', 8888, loop=self._loop)
-        server = self._loop.run_until_complete(coroutine)
+            self.create_client_connection, '127.0.0.1', 8888, loop=self.loop)
+        server = self.loop.run_until_complete(coroutine)
 
         # Serve requests until CTRL+c is pressed
         print('Serving on {}'.format(server.sockets[0].getsockname()))
-        try:
-            self._loop.run_forever()
-        except KeyboardInterrupt:
-            pass
+        super().run()
 
         # Close the server
         server.close()
-        self._loop.run_until_complete(server.wait_closed())
-        self._loop.close()
+        self.loop.run_until_complete(server.wait_closed())
+        self.loop.close()
 
     @asyncio.coroutine
     def create_client_connection(self, reader, writer):
@@ -71,8 +71,7 @@ class PubSubAgent():
         while not self.finished:
             try:
                 msg = yield from reader.read(MAX_PACKET_SIZE)
-                if not msg:
-                    # They've disconnected
+                if not msg:  # They've disconnected
                     break
             except (asyncio.CancelledError, asyncio.TimeoutError):
                 print("Cancelled or Timeout")
@@ -89,21 +88,24 @@ class PubSubAgent():
 
     @asyncio.coroutine
     def read_message(self, sender: ClientConnection, data: bytes):
-        message = data.decode('utf8')
-        # Subscription requests
-        if message.startswith('sub:'):
-            print("Subscribing", sender, "to", data)
-            # TODO: Hang up on any requests that aren't permitted
-            sender.subscriptions.append(message[4:])
-            # TODO: Sync the state of the subscription down
-        # Unsubscription request. No permission necessary.
-        elif message.startswith('unsub:'):
-            print("Unsubscribing", sender, "from", data)
-            # TODO: Don't crash if it's not in the list
-            sender.subscriptions.remove(message[6:])
-        else:
-            # This is a non-pubsub message; forward to the subclass
-            yield from self.handle_message(sender, data)
+        for d in [_ for _ in data.split(b'\n') if _]:
+            # Decode the message
+            message = d.decode('utf8')
+
+            # Subscription requests
+            if message.startswith('sub:'):
+                print("Subscribing", sender, "to", d)
+                # TODO: Hang up on any requests that aren't permitted
+                sender.subscriptions.append(message[4:])
+                # TODO: Sync the state of the subscription down
+            # Unsubscription request. No permission necessary.
+            elif message.startswith('unsub:'):
+                print("Unsubscribing", sender, "from", d)
+                # TODO: Don't crash if it's not in the list
+                sender.subscriptions.remove(message[6:])
+            else:
+                # This is a non-pubsub message; forward to the subclass
+                yield from self.handle_message(sender, d)
 
     @asyncio.coroutine
     def broadcast(self, channel: str, data: bytes):
