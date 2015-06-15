@@ -7,20 +7,13 @@ import sys
 from uuid import uuid4
 from agent import PubSubAgent
 from client import PubSubClient
+from distributed_objects import DistributedObject, Field
 from zone import ZoneServer
 
 
-class DistributedObject:
-    # TODO: This will be full of metaclass MAGIC!
-    pass
-
-
 class Message(DistributedObject):
-    def __init__(self, **data):
-        # We must have an id
-        self.id = data.get('id', str(uuid4()))
-        self.owner = data['owner']
-        self.text = data['text']
+    owner = Field(str)
+    text = Field(str)
 
     def serialize(self):
         return json.dumps({
