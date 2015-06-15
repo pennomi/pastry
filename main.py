@@ -25,8 +25,10 @@ class Message(DistributedObject):
 
 class HeartbeatClient(PubSubClient):
     account_id = str(uuid4())
+    messages = []
 
     def setup(self):
+        # Join a zone
         self.subscribe("zone-1")
         # self.subscribe("zone-2")
         asyncio.async(self.heartbeat(), loop=self._loop)
@@ -39,7 +41,10 @@ class HeartbeatClient(PubSubClient):
             yield from asyncio.sleep(5.0)
 
     def handle_message(self, data):
+        # TODO: This should have channel data in it
         print('Receiving:', data)
+        self.messages.append(data)
+        print('messages:', len(self.messages))
 
 
 class TestAgent(PubSubAgent):
@@ -74,6 +79,15 @@ class HeartbeatZone(ZoneServer):
             data = json.loads(message)
             self.objects.append(Message(**data))
             print("A total of {} messages".format(len(self.objects)))
+        # TODO: If it's a hello message, broadcast out the full state to the
+        if "hello" in channel:
+            data = json.loads(message)
+            for o in self.objects:
+                self.redis_broadcast(
+                    "{}.{}".format(data['id'], "zone-1.Message"),
+                    o.serialize())
+
+        # new person, on their private channel
 
 
 if __name__ == "__main__":

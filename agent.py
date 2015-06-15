@@ -1,10 +1,14 @@
 import asyncio
+import json
+from uuid import uuid4
 from base import RedisServer
 from settings import MAX_PACKET_SIZE
 
 
 class ClientConnection:
     def __init__(self, r, w):
+        # Upon connection, we assign this person a UUID.
+        self.id = str(uuid4())
         self.reader, self.writer = r, w
         self.subscriptions = []
 
@@ -54,11 +58,13 @@ class PubSubAgent(RedisServer):
         # Keep this connection around for a while
         connection = ClientConnection(reader, writer)
         self.connections.append(connection)
-        address = writer.get_extra_info('peername')
 
         # TODO: Authenticate
         if not self.authenticate():
             self.finished = True
+
+        # Sign up for internal private messages for this user
+        self.register_channel(connection.id)
 
         while not self.finished:
             try:
@@ -74,7 +80,7 @@ class PubSubAgent(RedisServer):
             # Handle the message
             yield from self.read_message(connection, msg)
 
-        print("Close the client socket for {}".format(address))
+        print("Close the socket for {}".format(connection))
         writer.close()
         self.connections.remove(connection)
 
@@ -86,11 +92,14 @@ class PubSubAgent(RedisServer):
 
             # Subscription requests
             if message.startswith('sub:'):
-                print("Subscribing", sender, "to", d)
+                channel_name = message[4:]
+                print("Subscribing", sender, "to", channel_name)
                 # TODO: Hang up on any requests that aren't permitted
-                sender.subscriptions.append(message[4:])
-                self.register_channel(message[4:])
-                # TODO: Sync the state of the subscription down
+                sender.subscriptions.append(channel_name)
+                self.register_channel(channel_name)
+                # Trigger the sync the state of the subscription
+                hello = json.dumps({"type": "join", "id": sender.id})
+                self.redis_broadcast("{}.hello".format(channel_name), hello)
             # Unsubscription request. No permission necessary.
             elif message.startswith('unsub:'):
                 print("Unsubscribing", sender, "from", d)

@@ -40,11 +40,6 @@ class PubSubClient():
 
         # TODO: Authentication
 
-        # Send the introduction message
-        # TODO: Subscribe to the authentication response's id. We always want
-        # to know about ourselves.
-        self.subscribe('todo-uuid')
-
         # Schedule any worker tasks
         asyncio.async(self.receive(), loop=self._loop)
         self.setup()

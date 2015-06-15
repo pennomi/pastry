@@ -17,7 +17,7 @@ class RedisServer:
     def handle_redis_message(self, channel: str, message: str):
         raise NotImplementedError()
 
-    def redis_broadcast(self, channel, message):
+    def redis_broadcast(self, channel: str, message: str):
         self._redis.publish(channel, message)
 
     def register_channel(self, channel_name):
