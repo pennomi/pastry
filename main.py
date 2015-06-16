@@ -27,10 +27,12 @@ class HeartbeatClient(PubSubClient):
     account_id = str(uuid4())
     messages = []
 
+    # TODO: Clients should be able to run before/after a connection
+
     def setup(self):
         # Join a zone
         self.subscribe("zone-1")
-        # self.subscribe("zone-2")
+        self.subscribe("zone-2")
         asyncio.async(self.heartbeat(), loop=self._loop)
 
     @asyncio.coroutine
@@ -40,21 +42,18 @@ class HeartbeatClient(PubSubClient):
             self._send(m.serialize())
             yield from asyncio.sleep(5.0)
 
-    def handle_message(self, data):
+    def handle_message(self, channel, data):
         # TODO: This should have channel data in it
-        print('Receiving:', data)
-        if b'join' not in data:
+        print('Receiving:', channel, data)
+        if 'hello' not in channel:
             self.messages.append(data)
             print('messages:', len(self.messages))
 
 
 class TestAgent(PubSubAgent):
     def authenticate(self, *args, **kwargs):
+        # TODO: I think this should return the user's PK?
         return True
-
-    def handle_redis_message(self, channel, message):
-        print("Send to clients:", channel, message)
-        asyncio.async(self.broadcast_to_clients(channel, message.encode()))
 
     @asyncio.coroutine
     def handle_client_message(self, sender, data):

@@ -1,4 +1,5 @@
 import asyncio
+import json
 from settings import MAX_PACKET_SIZE
 
 
@@ -11,18 +12,16 @@ class PubSubClient():
     def setup(self):
         raise NotImplementedError()
 
-    def handle_message(self, data: bytes):
+    def handle_message(self, channel: str, data: str):
         raise NotImplementedError()
 
     # Core Functions
-
     def subscribe(self, channel):
         self._send("sub:{}".format(channel))
 
     def unsubscribe(self, channel):
         self._send("unsub:{}".format(channel))
 
-    # Stuff under this line probably doesn't get overridden
     def run(self):
         self._loop = asyncio.get_event_loop()
         self._loop.run_until_complete(self.establish_connection())
@@ -32,6 +31,7 @@ class PubSubClient():
             pass
         self._loop.close()
 
+    # TODO: Audit all functions for private vs public
     @asyncio.coroutine
     def establish_connection(self):
         # Establish the socket
@@ -59,7 +59,8 @@ class PubSubClient():
             except Exception as exc:
                 print("Something happened!", exc)
                 yield from self.close()
-            self.handle_message(msg)
+            message = json.loads(msg.decode('utf8'))
+            self.handle_message(message['channel'], message['data'])
 
     def _send(self, data):
         print('Sending:', data)

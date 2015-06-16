@@ -46,6 +46,10 @@ class PubSubAgent(RedisServer):
     def handle_client_message(self, sender: ClientConnection, data: bytes):
         raise NotImplementedError()
 
+    def handle_redis_message(self, channel, message):
+        print("Send to clients:", channel, message)
+        asyncio.async(self.broadcast_to_clients(channel, message))
+
     def run(self):
         coroutine = asyncio.start_server(
             self.create_client_connection, '127.0.0.1', 8888, loop=self.loop)
@@ -123,14 +127,18 @@ class PubSubAgent(RedisServer):
                 yield from self.handle_client_message(sender, d)
 
     @asyncio.coroutine
-    def broadcast_to_clients(self, channel: str, data: bytes):
+    def broadcast_to_clients(self, channel: str, data: str):
         connections = [c for c in self.connections if c.responds_to(channel)]
         # TODO: Handle channels
         print("Sending: {} to {} connections".format(
             data, len(connections)))
+        to_send = json.dumps({
+            "channel": channel,
+            "data": data
+        })
         for c in connections:
             try:
-                c.writer.write(data)
+                c.writer.write(to_send.encode())
                 yield from c.writer.drain()
             except ConnectionResetError:
                 print("Lost connection to {}. Killing...".format(c))
