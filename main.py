@@ -43,8 +43,9 @@ class HeartbeatClient(PubSubClient):
     def handle_message(self, data):
         # TODO: This should have channel data in it
         print('Receiving:', data)
-        self.messages.append(data)
-        print('messages:', len(self.messages))
+        if b'join' not in data:
+            self.messages.append(data)
+            print('messages:', len(self.messages))
 
 
 class TestAgent(PubSubAgent):
@@ -52,8 +53,7 @@ class TestAgent(PubSubAgent):
         return True
 
     def handle_redis_message(self, channel, message):
-        print("Received (redis):", message)
-        print("Echoing down to everyone...", channel, message)
+        print("Send to clients:", channel, message)
         asyncio.async(self.broadcast_to_clients(channel, message.encode()))
 
     @asyncio.coroutine
@@ -62,8 +62,7 @@ class TestAgent(PubSubAgent):
         # Subscription requests are already handled; must be a
         # DistributedObject create/update.
         # TODO: Check that the message is permitted; if not, kill.
-        print("Handle {} from {}".format(data, sender))
-        #yield from self.broadcast_to_clients("channel will go here", data)
+        print("Received `{}` from `{}`".format(data, sender))
         # Once we know the message is allowed, send it to the zone server
         # TODO: How to know what zone this should be in anyway
         # TODO: Maybe it's a required attr on the DO
@@ -74,7 +73,7 @@ class HeartbeatZone(ZoneServer):
     zone_id = "zone-1"
 
     def handle_redis_message(self, channel, message):
-        print("Redis message:", channel, message)
+        print("Received:", channel, message)
         if channel.startswith("zone-1.Message"):
             data = json.loads(message)
             self.objects.append(Message(**data))

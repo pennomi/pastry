@@ -12,6 +12,16 @@ class ClientConnection:
         self.reader, self.writer = r, w
         self.subscriptions = []
 
+    def responds_to(self, channel: str) -> bool:
+        # I always am interested in myself
+        if channel.startswith(self.id):
+            return True
+        # Otherwise I just check my zone subscriptions
+        for s in self.subscriptions:
+            if channel.startswith(s.split('.')[0]):
+                return True
+        return False
+
     def kill(self):
         pass  # TODO: Implement me! We need an easy way to kill off a client.
 
@@ -114,10 +124,11 @@ class PubSubAgent(RedisServer):
 
     @asyncio.coroutine
     def broadcast_to_clients(self, channel: str, data: bytes):
+        connections = [c for c in self.connections if c.responds_to(channel)]
         # TODO: Handle channels
         print("Sending: {} to {} connections".format(
-            data, len(self.connections)))
-        for c in self.connections.copy():
+            data, len(connections)))
+        for c in connections:
             try:
                 c.writer.write(data)
                 yield from c.writer.drain()
