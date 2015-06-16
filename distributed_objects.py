@@ -55,7 +55,10 @@ class DistributedObjectMetaclass(type):
 
 class DistributedObject(metaclass=DistributedObjectMetaclass):
     """A very simple implementation of the DistributedObjectMetaclass."""
+    # Required attributes
     id = Field(str)
+    owner = Field(str)  # Null means owned by the ZoneServer
+    # zone = Field(str)  # TODO: Maybe a nullable zone; it's global otherwise
 
     def __init__(self, **kwargs):
         super().__init__()

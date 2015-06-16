@@ -12,7 +12,6 @@ from zone import ZoneServer
 
 
 class Message(DistributedObject):
-    owner = Field(str)
     text = Field(str)
 
     def serialize(self):
@@ -30,9 +29,9 @@ class HeartbeatClient(PubSubClient):
     # TODO: Clients should be able to run before/after a connection
 
     def setup(self):
-        # Join a zone
+        # Join a zone or two
+        self.subscribe("chat")
         self.subscribe("zone-1")
-        self.subscribe("zone-2")
         asyncio.async(self.heartbeat(), loop=self._loop)
 
     @asyncio.coroutine
@@ -42,6 +41,7 @@ class HeartbeatClient(PubSubClient):
             self._send(m.serialize())
             yield from asyncio.sleep(5.0)
 
+    # TODO: Push this into the Client code. Auto-create the DOs then trigger.
     def handle_message(self, channel, data):
         # TODO: This should have channel data in it
         print('Receiving:', channel, data)
@@ -55,6 +55,7 @@ class TestAgent(PubSubAgent):
         # TODO: I think this should return the user's PK?
         return True
 
+    # TODO: Push this behind the public interface
     @asyncio.coroutine
     def handle_client_message(self, sender, data):
         message = data.decode('utf8')
@@ -70,14 +71,21 @@ class TestAgent(PubSubAgent):
 
 class HeartbeatZone(ZoneServer):
     zone_id = "zone-1"
+    # TODO: Show a pattern here for logic. Both time-based and trigger-based.
+    # TODO: Time -- Once every N seconds, do a thing.
+    # TODO: Trigger -- On message create, rotate out (delete) any old messages
+    # TODO: Trigger -- On entry and exit, display messages
 
     def handle_redis_message(self, channel, message):
+        # TODO: This whole method should be reduced in scope
         print("Received:", channel, message)
-        if channel.startswith("zone-1.Message"):
+        # Handle creating of DOs
+        if channel.startswith("{}.Message".format(self.zone_id)):
             data = json.loads(message)
             self.objects.append(Message(**data))
             print("A total of {} messages".format(len(self.objects)))
-        # TODO: If it's a hello message, broadcast out the full state to the
+        # If it's a join message, broadcast out the full state to the
+        # entrant on their private channel
         if "hello" in channel:
             data = json.loads(message)
             for o in self.objects:
@@ -85,7 +93,12 @@ class HeartbeatZone(ZoneServer):
                     "{}.{}".format(data['id'], "zone-1.Message"),
                     o.serialize())
 
-        # new person, on their private channel
+
+# TODO: A MultiServer that can run any number of registered Zone and Agent
+# servers simultaneously. This should also configure log output to identify
+# the source.
+# You wouldn't deploy the MultiServer in production, but it'd be insanely
+# useful in development.
 
 
 if __name__ == "__main__":
