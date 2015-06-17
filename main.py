@@ -41,6 +41,9 @@ class HeartbeatClient(PubSubClient):
             self._send(m.serialize())
             yield from asyncio.sleep(5.0)
 
+    def object_created(self, distributed_object):
+        pass
+
     # TODO: Push this into the Client code. Auto-create the DOs then trigger.
     def handle_message(self, channel, data):
         # TODO: This should have channel data in it

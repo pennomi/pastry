@@ -40,7 +40,7 @@ class DistributedObjectMetaclass(type):
 
             def make_setter(n):
                 def setter(self, value):
-                    # TODO: enforce types here
+                    # TODO: run validators here (enforce types, etc.)
                     self._saved_field_data[n] = value
                 setter.__name__ = n
                 return setter

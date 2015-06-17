@@ -12,6 +12,10 @@ class PubSubClient():
     def setup(self):
         raise NotImplementedError()
 
+    def object_created(self, distributed_object):
+        # Unlike the other hooks, this one isn't required.
+        pass
+
     def handle_message(self, channel: str, data: str):
         raise NotImplementedError()
 
