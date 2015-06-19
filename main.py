@@ -22,7 +22,13 @@ class Message(DistributedObject):
         })
 
 
+# Register all DOs here; this variable propagates to all the various components
+TEST_REGISTRY = [Message]
+
+
 class HeartbeatClient(PubSubClient):
+    registry = TEST_REGISTRY
+
     account_id = str(uuid4())
     messages = []
 
@@ -48,32 +54,25 @@ class HeartbeatClient(PubSubClient):
     def handle_message(self, channel, data):
         # TODO: This should have channel data in it
         print('Receiving:', channel, data)
-        if 'hello' not in channel:
+        # TODO: Handle "leave" messages too
+        if 'join' not in channel:
+            m = Message()
             self.messages.append(data)
             print('messages:', len(self.messages))
 
 
 class TestAgent(PubSubAgent):
+    registry = TEST_REGISTRY
+
     def authenticate(self, *args, **kwargs):
         # TODO: I think this should return the user's PK?
         return True
 
-    # TODO: Push this behind the public interface
-    @asyncio.coroutine
-    def handle_client_message(self, sender, data):
-        message = data.decode('utf8')
-        # Subscription requests are already handled; must be a
-        # DistributedObject create/update.
-        # TODO: Check that the message is permitted; if not, kill.
-        print("Received `{}` from `{}`".format(data, sender))
-        # Once we know the message is allowed, send it to the zone server
-        # TODO: How to know what zone this should be in anyway
-        # TODO: Maybe it's a required attr on the DO
-        self.redis_broadcast("zone-1.Message.create", message)
-
 
 class HeartbeatZone(ZoneServer):
+    registry = TEST_REGISTRY
     zone_id = "zone-1"
+
     # TODO: Show a pattern here for logic. Both time-based and trigger-based.
     # TODO: Time -- Once every N seconds, do a thing.
     # TODO: Trigger -- On message create, rotate out (delete) any old messages
@@ -89,7 +88,8 @@ class HeartbeatZone(ZoneServer):
             print("A total of {} messages".format(len(self.objects)))
         # If it's a join message, broadcast out the full state to the
         # entrant on their private channel
-        if "hello" in channel:
+        # TODO: Handle "leave" messages too
+        if "join" in channel:
             data = json.loads(message)
             for o in self.objects:
                 self.redis_broadcast(

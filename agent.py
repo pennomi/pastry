@@ -6,6 +6,7 @@ from settings import MAX_PACKET_SIZE
 
 
 class ClientConnection:
+    """Represents all the data pertaining to one client."""
     def __init__(self, r, w):
         # Upon connection, we assign this person a UUID.
         self.id = str(uuid4())
@@ -43,14 +44,15 @@ class PubSubAgent(RedisServer):
     def authenticate(self, *args, **kwargs) -> bool:
         raise NotImplementedError()
 
-    def handle_client_message(self, sender: ClientConnection, data: bytes):
-        raise NotImplementedError()
-
     def handle_redis_message(self, channel, message):
+        """Whenever the agent receives an internal message, it's forwarded
+        to all relevant clients.
+        """
         print("Send to clients:", channel, message)
         asyncio.async(self.broadcast_to_clients(channel, message))
 
     def run(self):
+        """Start the server process."""
         coroutine = asyncio.start_server(
             self.create_client_connection, '127.0.0.1', 8888, loop=self.loop)
         server = self.loop.run_until_complete(coroutine)
@@ -112,8 +114,8 @@ class PubSubAgent(RedisServer):
                 sender.subscriptions.append(channel_name)
                 self.register_channel(channel_name)
                 # Trigger the sync the state of the subscription
-                hello = json.dumps({"type": "join", "id": sender.id})
-                self.redis_broadcast("{}.hello".format(channel_name), hello)
+                join_msg = json.dumps({"type": "join", "id": sender.id})
+                self.redis_broadcast("{}.join".format(channel_name), join_msg)
             # Unsubscription request. No permission necessary.
             elif message.startswith('unsub:'):
                 print("Unsubscribing", sender, "from", d)
@@ -122,9 +124,25 @@ class PubSubAgent(RedisServer):
                 # TODO: Check all subscriptions to see if this is needed any
                 # more. Others might still be using it!
                 self.unregister_channel(message[6:])
+                # Get all the delete messages
+                # TODO: is this necessary if we force objects to have zones?
+                leave_msg = json.dumps({"type": "leave", "id": sender.id})
+                self.redis_broadcast("{}.leave".format(message[6:]), leave_msg)
             else:
-                # This is a non-pubsub message; forward to the subclass
+                # This is a non-pubsub message; forward to the do handler
                 yield from self.handle_client_message(sender, d)
+
+    def handle_client_message(self, sender: ClientConnection, data: bytes):
+        message = data.decode('utf8')
+        # Subscription requests are already handled; must be a
+        # DistributedObject create/update.
+        # TODO: Check that the message is permitted; if not, kill.
+        print("Received `{}` from `{}`".format(data, sender))
+        # Once we know the message is allowed, send it to the zone server
+        # TODO: How to know what zone this should be in anyway
+        # TODO: Maybe it's a required attr on the DO
+        # TODO: No hardcoding the channels!
+        self.redis_broadcast("zone-1.Message.create", message)
 
     @asyncio.coroutine
     def broadcast_to_clients(self, channel: str, data: str):
