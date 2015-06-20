@@ -14,13 +14,6 @@ from zone import ZoneServer
 class Message(DistributedObject):
     text = Field(str)
 
-    def serialize(self):
-        return json.dumps({
-            "id": self.id,
-            "owner": self.owner,
-            "text": self.text
-        })
-
 
 # Register all DOs here; this variable propagates to all the various components
 TEST_REGISTRY = [Message]
@@ -43,7 +36,7 @@ class HeartbeatClient(PubSubClient):
     @asyncio.coroutine
     def heartbeat(self):
         while not self.finished:
-            m = Message(owner=self.account_id, text="Heartbeat")
+            m = Message(owner=self.account_id, text="Heartbeat", zone="zone-1")
             self._send(m.serialize())
             yield from asyncio.sleep(5.0)
 
@@ -56,7 +49,7 @@ class HeartbeatClient(PubSubClient):
         print('Receiving:', channel, data)
         # TODO: Handle "leave" messages too
         if 'join' not in channel:
-            m = Message()
+            # TODO: m = Message(**stuff)
             self.messages.append(data)
             print('messages:', len(self.messages))
 

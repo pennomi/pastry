@@ -1,3 +1,4 @@
+import json
 from uuid import uuid4
 
 
@@ -58,16 +59,25 @@ class DistributedObject(metaclass=DistributedObjectMetaclass):
     # Required attributes
     id = Field(str)
     owner = Field(str)  # Null means owned by the ZoneServer
-    # zone = Field(str)  # TODO: Maybe a nullable zone; it's global otherwise
+    zone = Field(str)  # The id of the zone this DO belongs to.
 
-    def __init__(self, **kwargs):
+    def __init__(self, zone=None, **kwargs):
         super().__init__()
-        # We must have an id. If it wasn't specified, UUID it.
-        self.id = kwargs.get('id', str(uuid4()))
-
         # Copy so they're not shared between all instances
         self._dirty_field_data = self._dirty_field_data.copy()
         self._saved_field_data = self._saved_field_data.copy()
 
-        # Populate from the kwargs
-        self._saved_field_data.update(kwargs)
+        # Populate initial state from the kwargs
+        # TODO: This might be dirty data?
+        self._saved_field_data.update(zone=zone, **kwargs)
+
+        # We must have an id. If it wasn't specified, UUID it.
+        self.id = kwargs.get('id', str(uuid4()))
+
+        # Must also have a zone. But we can't generate this one.
+        assert self.zone, "DO must have a zone."
+
+    def serialize(self):
+        # TODO: This will eventually be a "save" method, which only serializes
+        # the dirty state.
+        return json.dumps(self._saved_field_data)
