@@ -21,14 +21,21 @@ class Message(DistributedObject):
 
 
 # Register all DOs here; this variable propagates to all the various components
-TEST_REGISTRY = [Message]
+class ObjectRegistry(list):
+    def __getitem__(self, classname: str):
+        for i in self:
+            if i.__name__ == classname:
+                return i
+        raise IndexError(
+            "{} is not a registered Distributed Object.".format(classname))
+
+TEST_REGISTRY = ObjectRegistry([Message])
 
 
 class HeartbeatClient(PubSubClient):
     registry = TEST_REGISTRY
 
     account_id = str(uuid4())
-    messages = []
 
     # TODO: Clients should be able to run before/after a connection
 
@@ -49,16 +56,10 @@ class HeartbeatClient(PubSubClient):
     def object_created(self, distributed_object):
         pass
 
-    # TODO: Push this into the Client code. Auto-create the DOs then trigger.
-    # TODO: Also handle updating and deleting DOs
+    # TODO: Instead, trigger a bunch of useful callbacks, like `object_created`
     def handle_message(self, channel, data):
-        print('Receiving:', channel, data)
-        # TODO: Handle "leave" messages too
-        c = Channel.parse(channel)
-        if c.method != 'join':
-            # TODO: m = Message(**stuff)
-            self.messages.append(data)
-            print('messages:', len(self.messages))
+        super().handle_message(channel, data)
+        print('messages:', len(self.objects))
 
 
 class TestAgent(PubSubAgent):

@@ -1,6 +1,7 @@
 import asyncio
 import json
 from settings import MAX_PACKET_SIZE
+from util import Channel
 
 
 class PubSubClient():
@@ -8,6 +9,11 @@ class PubSubClient():
     _reader = None
     _writer = None
     finished = False
+    registry = None
+
+    def __init__(self):
+        super().__init__()
+        self.objects = []
 
     def setup(self):
         raise NotImplementedError()
@@ -16,8 +22,14 @@ class PubSubClient():
         # Unlike the other hooks, this one isn't required.
         pass
 
-    def handle_message(self, channel: str, data: str):
-        raise NotImplementedError()
+    def handle_message(self, channel: Channel, data: str):
+        # TODO: Also handle updating and deleting DOs
+        print('Receiving:', channel, data)
+        if channel.method == 'create':
+            class_ = self.registry[channel.code_name]
+            kwargs = json.loads(data)
+            created_object = class_(**kwargs)
+            self.objects.append(created_object)
 
     # Core Functions
     def subscribe(self, channel):
@@ -64,7 +76,8 @@ class PubSubClient():
                 print("Something happened!", exc)
                 yield from self.close()
             message = json.loads(msg.decode('utf8'))
-            self.handle_message(message['channel'], message['data'])
+            c = Channel.parse(message['channel'])
+            self.handle_message(c, message['data'])
 
     def _send(self, data):
         print('Sending:', data)
