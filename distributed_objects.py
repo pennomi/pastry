@@ -31,6 +31,8 @@ class DistributedObjectMetaclass(type):
             else:
                 attrs['_saved_field_data'][name] = None
 
+            # Create properties only for the specified fields.
+            # We don't want to override global get/set behavior.
             def make_getter(n):
                 def getter(self):
                     # Try to get from dirty, otherwise get from saved.
@@ -48,7 +50,8 @@ class DistributedObjectMetaclass(type):
 
             attrs[name] = property(
                 fget=make_getter(name), fset=make_setter(name),
-                fdel=None, doc=name  # TODO: Use the "help" param on the field
+                fdel=None, doc=name
+                # TODO: Use the "help" param on the field for doc
             )
 
         return super().__new__(mcs, classname, baseclasses, attrs)

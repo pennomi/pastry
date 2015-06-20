@@ -1,7 +1,7 @@
-from base import RedisServer
+from base import InternalMessagingServer
 
 
-class ZoneServer(RedisServer):
+class ZoneServer(InternalMessagingServer):
     """Persists state, makes changes to the state, and broadcasts the state so
     it gets to the right people.
     """
@@ -12,5 +12,5 @@ class ZoneServer(RedisServer):
             raise NotImplementedError("Must have a zone_id on the zone server")
 
         super().__init__()
-        self.register_channel(self.zone_id)
+        self.internal_subscribe(self.zone_id)
         self.objects = []

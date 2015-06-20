@@ -1,8 +1,9 @@
 import asyncio
 import json
 from uuid import uuid4
-from base import RedisServer
+from base import InternalMessagingServer
 from settings import MAX_PACKET_SIZE
+from util import Channel
 
 
 class ClientConnection:
@@ -13,15 +14,12 @@ class ClientConnection:
         self.reader, self.writer = r, w
         self.subscriptions = []
 
-    def responds_to(self, channel: str) -> bool:
+    def responds_to(self, channel: Channel) -> bool:
         # I always am interested in myself
-        if channel.startswith(self.id):
+        if channel.target == self.id:
             return True
         # Otherwise I just check my zone subscriptions
-        for s in self.subscriptions:
-            if channel.startswith(s.split('.')[0]):
-                return True
-        return False
+        return channel.target in self.subscriptions
 
     def kill(self):
         pass  # TODO: Implement me! We need an easy way to kill off a client.
@@ -30,7 +28,7 @@ class ClientConnection:
         return "<Client {}>".format(self.writer.get_extra_info('peername'))
 
 
-class PubSubAgent(RedisServer):
+class PubSubAgent(InternalMessagingServer):
     """The agent is the secure gateway through which the client connects to
     the full system.
 
@@ -44,12 +42,12 @@ class PubSubAgent(RedisServer):
     def authenticate(self, *args, **kwargs) -> bool:
         raise NotImplementedError()
 
-    def handle_redis_message(self, channel, message):
+    def handle_internal_message(self, channel, message):
         """Whenever the agent receives an internal message, it's forwarded
         to all relevant clients.
         """
         print("Send to clients:", channel, message)
-        asyncio.async(self.broadcast_to_clients(channel, message))
+        asyncio.async(self.client_broadcast(channel, message))
 
     def run(self):
         """Start the server process."""
@@ -80,7 +78,7 @@ class PubSubAgent(RedisServer):
             self.finished = True
 
         # Sign up for internal private messages for this user
-        self.register_channel(connection.id)
+        self.internal_subscribe(connection.id)
 
         while not self.finished:
             try:
@@ -107,15 +105,17 @@ class PubSubAgent(RedisServer):
             message = d.decode('utf8')
 
             # Subscription requests
+            # TODO: Find a better
             if message.startswith('sub:'):
-                channel_name = message[4:]
-                print("Subscribing", sender, "to", channel_name)
+                zone_name = message[4:]
+                print("Subscribing", sender, "to", zone_name)
                 # TODO: Hang up on any requests that aren't permitted
-                sender.subscriptions.append(channel_name)
-                self.register_channel(channel_name)
+                # TODO: (ie. can't subscribe to any subchannels: no `.`s)
+                sender.subscriptions.append(zone_name)
+                self.internal_subscribe(zone_name)
                 # Trigger the sync the state of the subscription
-                join_msg = json.dumps({"type": "join", "id": sender.id})
-                self.redis_broadcast("{}.join".format(channel_name), join_msg)
+                c = Channel(target=zone_name, method="join")
+                self.internal_broadcast(c, sender.id)
             # Unsubscription request. No permission necessary.
             elif message.startswith('unsub:'):
                 print("Unsubscribing", sender, "from", d)
@@ -123,17 +123,16 @@ class PubSubAgent(RedisServer):
                 sender.subscriptions.remove(message[6:])
                 # TODO: Check all subscriptions to see if this is needed any
                 # more. Others might still be using it!
-                self.unregister_channel(message[6:])
-                # Get all the delete messages
-                # TODO: is this necessary if we force objects to have zones?
-                leave_msg = json.dumps({"type": "leave", "id": sender.id})
-                self.redis_broadcast("{}.leave".format(message[6:]), leave_msg)
+                self.internal_unsubscribe(message[6:])
+                c = Channel(target=message[6:], method="leave")
+                self.internal_broadcast(c, sender.id)
             else:
                 # This is a non-pubsub message; forward to the do handler
                 yield from self.handle_client_message(sender, d)
 
     @asyncio.coroutine
     def handle_client_message(self, sender: ClientConnection, data: bytes):
+        # TODO: This should receive channels too?
         message = data.decode('utf8')
         # Subscription requests are already handled; must be a
         # DistributedObject create/update.
@@ -143,16 +142,18 @@ class PubSubAgent(RedisServer):
         # TODO: How to know what zone this should be in anyway
         # TODO: Maybe it's a required attr on the DO
         # TODO: No hardcoding the channels!
-        self.redis_broadcast("zone-1.Message.create", message)
+        channel = Channel(
+            target="chat", method="create", code_name="Message")
+        self.internal_broadcast(channel, message)
 
     @asyncio.coroutine
-    def broadcast_to_clients(self, channel: str, data: str):
+    def client_broadcast(self, channel: Channel, data: str):
         connections = [c for c in self.connections if c.responds_to(channel)]
-        # TODO: Handle channels
+        # TODO: Handle channels better on the client itself
         print("Sending: {} to {} connections".format(
             data, len(connections)))
         to_send = json.dumps({
-            "channel": channel,
+            "channel": str(channel),
             "data": data
         })
         for c in connections:

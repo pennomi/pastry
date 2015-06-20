@@ -18,7 +18,7 @@ ZONE_ID in the channel serves entirely as an internal message pruning system.
 # TODO: Should this class move into an internal_messaging module with Redis?
 
 
-class InternalChannel:
+class Channel:
     """A classy representation of channels. This makes it easier
     to route messages cleanly.
     """
@@ -34,7 +34,7 @@ class InternalChannel:
         self.method = method
         self.code_name = code_name
         if self.code_name and self.method not in ["create", "call"]:
-            raise TypeError("")
+            raise TypeError("code_name only used on `create` and `call`")
 
     @staticmethod
     def parse(channel_expression: str):
@@ -42,11 +42,11 @@ class InternalChannel:
         target, method, *rest = channel_expression.split('.')
         code = None
         if rest:
-            code = rest
-        return InternalChannel(target=target, method=method, code_name=code)
+            code = rest[0]
+        return Channel(target=target, method=method, code_name=code)
 
     def __str__(self):
         pieces = [self.target, self.method]
         if self.code_name:
             pieces.append(self.code_name)
-        return ".".join(self.code_name)
+        return ".".join(pieces)
