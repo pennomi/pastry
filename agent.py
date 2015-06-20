@@ -132,6 +132,7 @@ class PubSubAgent(RedisServer):
                 # This is a non-pubsub message; forward to the do handler
                 yield from self.handle_client_message(sender, d)
 
+    @asyncio.coroutine
     def handle_client_message(self, sender: ClientConnection, data: bytes):
         message = data.decode('utf8')
         # Subscription requests are already handled; must be a
