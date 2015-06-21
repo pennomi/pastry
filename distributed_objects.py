@@ -84,3 +84,56 @@ class DistributedObject(metaclass=DistributedObjectMetaclass):
         # TODO: This will eventually be a "save" method, which only serializes
         # the dirty state.
         return json.dumps(self._saved_field_data)
+
+
+class DistributedObjectClassRegistry:
+    def __init__(self, *args):
+        # TODO: Validate these are actually DO subclasses
+        self._classes = args
+
+    def __getitem__(self, classname: str):
+        for i in self._classes:
+            if i.__name__ == classname:
+                return i
+        raise IndexError(
+            "{} is not a registered Distributed Object.".format(classname))
+
+
+class DistributedObjectState:
+    """Persists the object state on the zone server and the client."""
+
+    # TODO: Extend this with nice filtering for easier development.
+    # For example: self.objects.filter(class=Message)
+    def __init__(self, create_callback, update_callback, delete_callback):
+        self._instances = []
+        self.create_callback = create_callback
+        self.update_callback = update_callback
+        self.delete_callback = delete_callback
+
+    def create(self, obj: DistributedObject):
+        # TODO: The actual packet parsing should happen here too
+        self._instances.append(obj)
+        self.create_callback(obj)
+
+    def update(self, obj_id: str, fields: dict):
+        # TODO: Update plumbing is missing
+        obj = None
+        self.update_callback(obj)
+
+    def delete(self, obj_id: str):
+        obj = self[obj_id]
+        self._instances.remove(obj)
+        self.delete_callback(obj)
+
+    def __getitem__(self, object_id: str):
+        for o in self._instances:
+            if o.id == object_id:
+                return o
+        raise IndexError(
+            "{} ".format(object_id))
+
+    def __len__(self):
+        return len(self._instances)
+
+    def __iter__(self):
+        return iter(self._instances)

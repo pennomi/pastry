@@ -28,7 +28,7 @@ class ClientConnection:
         return "<Client {}>".format(self.writer.get_extra_info('peername'))
 
 
-class PubSubAgent(InternalMessagingServer):
+class PastryAgent(InternalMessagingServer):
     """The agent is the secure gateway through which the client connects to
     the full system.
 

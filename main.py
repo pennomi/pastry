@@ -3,14 +3,13 @@ Pastry is a DistributedObject architecture that makes creating MMO games easy
 as pie!
 """
 import asyncio
-import json
 import sys
 from uuid import uuid4
-from agent import PubSubAgent
-from client import PubSubClient
-from distributed_objects import DistributedObject, Field
-from util import Channel
-from zone import ZoneServer
+from agent import PastryAgent
+from client import PastryClient
+from distributed_objects import DistributedObject, Field, \
+    DistributedObjectClassRegistry
+from zone import PastryZone
 
 
 class Message(DistributedObject):
@@ -21,23 +20,15 @@ class Message(DistributedObject):
 
 
 # Register all DOs here; this variable propagates to all the various components
-class ObjectRegistry(list):
-    def __getitem__(self, classname: str):
-        for i in self:
-            if i.__name__ == classname:
-                return i
-        raise IndexError(
-            "{} is not a registered Distributed Object.".format(classname))
-
-TEST_REGISTRY = ObjectRegistry([Message])
+CHAT_REGISTRY = DistributedObjectClassRegistry(
+    Message
+)
 
 
-class HeartbeatClient(PubSubClient):
-    registry = TEST_REGISTRY
-
+# TODO: Clients should be able to run before/after a connection
+class ChatClient(PastryClient):
+    registry = CHAT_REGISTRY
     account_id = str(uuid4())
-
-    # TODO: Clients should be able to run before/after a connection
 
     def setup(self):
         # Join a zone or two
@@ -54,48 +45,39 @@ class HeartbeatClient(PubSubClient):
             yield from asyncio.sleep(5.0)
 
     def object_created(self, distributed_object):
-        pass
+        print('messages:', len(self.objects))
 
-    # TODO: Instead, trigger a bunch of useful callbacks, like `object_created`
-    def handle_message(self, channel, data):
-        super().handle_message(channel, data)
+    def object_updated(self, distributed_object):
+        print('messages:', len(self.objects))
+
+    def object_deleted(self, distributed_object):
         print('messages:', len(self.objects))
 
 
-class TestAgent(PubSubAgent):
-    registry = TEST_REGISTRY
+class TestAgent(PastryAgent):
+    registry = CHAT_REGISTRY
 
     def authenticate(self, *args, **kwargs):
         # TODO: I think this should return the user's PK?
         return True
 
 
-class ChatZone(ZoneServer):
-    registry = TEST_REGISTRY
+class ChatZone(PastryZone):
+    registry = CHAT_REGISTRY
     zone_id = "chat"
 
     # TODO: Show a pattern here for logic. Both time-based and trigger-based.
     # TODO: Time -- Once every N seconds, do a thing.
     # TODO: Trigger -- On message create, rotate out (delete) any old messages
     # TODO: Trigger -- On entry and exit, display messages
+    def object_created(self, obj: DistributedObject):
+        print("messages:", len(self.objects))
 
-    def handle_internal_message(self, channel, message):
-        # TODO: This whole method should be reduced in scope
-        print("Received:", channel, message)
-        # Handle creating of DOs
-        if channel.method == "create":
-            data = json.loads(message)
-            self.objects.append(Message(**data))
-            print("A total of {} messages".format(len(self.objects)))
-        # If it's a join message, broadcast out the full state to the
-        # entrant on their private channel
-        elif channel.method == "join":
-            # Someone just joined! Let's sync down our zone's state.
-            for o in self.objects:
-                output_channel = Channel(
-                    target=message, method="create",
-                    code_name=o.__class__.__name__)
-                self.internal_broadcast(output_channel, o.serialize())
+    def object_updated(self, obj: DistributedObject):
+        print(obj, "was updated.")
+
+    def object_deleted(self, obj: DistributedObject):
+        print(obj, "was deleted.")
 
 
 # TODO: A MultiServer that can run any number of registered Zone and Agent
@@ -110,9 +92,9 @@ if __name__ == "__main__":
     if thing == 'agent':
         to_start = TestAgent()
     elif thing == 'client':
-        to_start = HeartbeatClient()
+        to_start = ChatClient()
     elif thing == 'zone':
         to_start = ChatZone()
     else:
-        raise ValueError('Must be server, client or ai')
+        raise ValueError('Must be agent, client or zone')
     to_start.run()

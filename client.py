@@ -1,10 +1,11 @@
 import asyncio
 import json
+from distributed_objects import DistributedObjectState, DistributedObject
 from settings import MAX_PACKET_SIZE
 from util import Channel
 
 
-class PubSubClient():
+class PastryClient():
     _loop = None
     _reader = None
     _writer = None
@@ -13,13 +14,19 @@ class PubSubClient():
 
     def __init__(self):
         super().__init__()
-        self.objects = []
+        self.objects = DistributedObjectState(
+            self.object_created, self.object_updated, self.object_deleted)
 
     def setup(self):
         raise NotImplementedError()
 
-    def object_created(self, distributed_object):
-        # Unlike the other hooks, this one isn't required.
+    def object_created(self, distributed_object: DistributedObject):
+        pass
+
+    def object_updated(self, distributed_object: DistributedObject):
+        pass
+
+    def object_deleted(self, distributed_object: DistributedObject):
         pass
 
     def handle_message(self, channel: Channel, data: str):
@@ -29,7 +36,7 @@ class PubSubClient():
             class_ = self.registry[channel.code_name]
             kwargs = json.loads(data)
             created_object = class_(**kwargs)
-            self.objects.append(created_object)
+            self.objects.create(created_object)
 
     # Core Functions
     def subscribe(self, channel):
