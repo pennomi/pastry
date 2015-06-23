@@ -64,7 +64,7 @@ class DistributedObject(metaclass=DistributedObjectMetaclass):
     owner = Field(str)  # Null means owned by the ZoneServer
     zone = Field(str)  # The id of the zone this DO belongs to.
 
-    def __init__(self, zone=None, **kwargs):
+    def __init__(self, *, zone=None, **kwargs):
         super().__init__()
         # Copy so they're not shared between all instances
         self._dirty_field_data = self._dirty_field_data.copy()

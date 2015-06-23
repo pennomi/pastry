@@ -70,6 +70,7 @@ class PastryClient():
     @asyncio.coroutine
     def receive(self):
         msg = None
+        leftovers = b''
         while not self.finished:
             try:
                 msg = yield from self._reader.read(MAX_PACKET_SIZE)
@@ -82,9 +83,20 @@ class PastryClient():
             except Exception as exc:
                 print("Something happened!", exc)
                 yield from self.close()
-            message = json.loads(msg.decode('utf8'))
-            c = Channel.parse(message['channel'])
-            self.handle_message(c, message['data'])
+            msg = leftovers + msg
+            leftovers = b''
+            messages = msg.split(b"\n")
+            for m in messages:
+                m = m.strip()
+                if not m:
+                    continue
+                try:
+                    message = json.loads(m.decode('utf8'))
+                    c = Channel.parse(message['channel'])
+                    self.handle_message(c, message['data'])
+                except ValueError as e:
+                    # Didn't get the full message, save for next time.
+                    leftovers = m
 
     def _send(self, data):
         print('Sending:', data)

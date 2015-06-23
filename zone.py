@@ -28,6 +28,12 @@ class PastryZone(InternalMessagingServer):
         self.objects = DistributedObjectState(
             self.object_created, self.object_updated, self.object_deleted)
 
+        # Run any game-specific logic
+        self.setup()
+
+    def setup(self):
+        pass
+
     def object_created(self, obj: DistributedObject):
         pass
 

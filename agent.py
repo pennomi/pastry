@@ -42,13 +42,6 @@ class PastryAgent(InternalMessagingServer):
     def authenticate(self, *args, **kwargs) -> bool:
         raise NotImplementedError()
 
-    def handle_internal_message(self, channel, message):
-        """Whenever the agent receives an internal message, it's forwarded
-        to all relevant clients.
-        """
-        print("Send to clients:", channel, message)
-        asyncio.async(self.client_broadcast(channel, message))
-
     def run(self):
         """Start the server process."""
         coroutine = asyncio.start_server(
@@ -146,6 +139,12 @@ class PastryAgent(InternalMessagingServer):
             target="chat", method="create", code_name="Message")
         self.internal_broadcast(channel, message)
 
+    def handle_internal_message(self, channel, message):
+        """Whenever the agent receives an internal message, it's forwarded
+        to all relevant clients.
+        """
+        asyncio.async(self.client_broadcast(channel, message))
+
     @asyncio.coroutine
     def client_broadcast(self, channel: Channel, data: str):
         connections = [c for c in self.connections if c.responds_to(channel)]
@@ -158,7 +157,7 @@ class PastryAgent(InternalMessagingServer):
         })
         for c in connections:
             try:
-                c.writer.write(to_send.encode())
+                c.writer.write(to_send.encode() + b'\n')
                 yield from c.writer.drain()
             except ConnectionResetError:
                 print("Lost connection to {}. Killing...".format(c))
