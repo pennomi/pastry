@@ -52,7 +52,7 @@ class ChessClient(PastryClient):
         self.game.pieces[obj.square] = model, obj
 
     def object_updated(self, distributed_object):
-        print('objects:', len(self.objects))
+        print('object updated:', distributed_object)
 
     def object_deleted(self, distributed_object):
         print('objects:', len(self.objects))

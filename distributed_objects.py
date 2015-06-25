@@ -80,6 +80,9 @@ class DistributedObject(metaclass=DistributedObjectMetaclass):
         # Must also have a zone. But we can't generate this one.
         assert self.zone, "DO must have a zone."
 
+    def update(self, data):
+        self._saved_field_data.update(data)
+
     def save(self, client):
         # TODO: Eventually only send the dirty state
         self._saved_field_data.update(self._dirty_field_data)
@@ -117,13 +120,13 @@ class DistributedObjectState:
         self.delete_callback = delete_callback
 
     def create(self, obj: DistributedObject):
-        # TODO: The actual packet parsing should happen here too
+        # TODO: Should the actual packet parsing happen here too?
         self._instances.append(obj)
         self.create_callback(obj)
 
     def update(self, obj_id: str, fields: dict):
-        # TODO: Update plumbing is missing
-        obj = None
+        obj = self[obj_id]
+        obj.update(fields)
         self.update_callback(obj)
 
     def delete(self, obj_id: str):

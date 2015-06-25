@@ -32,11 +32,19 @@ class PastryClient():
     def handle_message(self, channel: Channel, data: str):
         # TODO: Also handle updating and deleting DOs
         print('Receiving:', channel, data)
+        # TODO: A lot of this is repeated code on the client/zone. Can it be
+        # generalized?
         if channel.method == 'create':
             class_ = self.registry[channel.code_name]
             kwargs = json.loads(data)
             created_object = class_(**kwargs)
+            # TODO: Maybe this should take in the registry or something
             self.objects.create(created_object)
+        elif channel.method == 'update':
+            kwargs = json.loads(data)
+            # TODO: Maybe the kwargs['id'] isn't necessary? We could force `id`
+            # and `zone` to always be serialized.
+            self.objects.update(kwargs['id'], kwargs)
 
     # Core Functions
     def subscribe(self, channel):

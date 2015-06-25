@@ -45,13 +45,17 @@ class PastryZone(InternalMessagingServer):
 
     def handle_internal_message(self, channel, message):
         print("Received:", channel, message)
+
         if channel.method == "create":
-            # An object was created! Add it like normal.
             data = json.loads(message)
+            # An object was created! Add it like normal.
             class_ = self.registry[channel.code_name]
             self.objects.create(class_(**data))
 
-        # TODO: Update, Delete, Call, Leave
+        elif channel.method == "update":
+            data = json.loads(message)
+            obj = self.objects.update(data['id'], data)
+        # TODO: Delete, Call, Leave
 
         elif channel.method == "join":
             # Someone just joined! Let's sync down our zone's state.
