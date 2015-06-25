@@ -128,15 +128,17 @@ class PastryAgent(InternalMessagingServer):
         # TODO: This should receive channels too?
         message = data.decode('utf8')
         # Subscription requests are already handled; must be a
-        # DistributedObject create/update.
+        # DistributedObject create/update/delete/call.
         # TODO: Check that the message is permitted; if not, kill.
         print("Received `{}` from `{}`".format(data, sender))
         # Once we know the message is allowed, send it to the zone server
-        # TODO: How to know what zone this should be in anyway
-        # TODO: Maybe it's a required attr on the DO
-        # TODO: No hardcoding the channels!
+        # TODO: Creating objects on the client here. Probably need the client
+        # to send channel data too
+
+        # Handle an update message
+        kwargs = json.loads(message)
         channel = Channel(
-            target="chat", method="create", code_name="Message")
+            target=kwargs["zone"], method="update")
         self.internal_broadcast(channel, message)
 
     def handle_internal_message(self, channel, message):

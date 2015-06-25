@@ -17,8 +17,6 @@ from panda3d.core import TextNode
 from panda3d.core import LPoint3, LVector3, BitMask32
 from direct.gui.OnscreenText import OnscreenText
 from direct.task.Task import Task
-from samples.chessboard.objects import Rook, Bishop, Queen, King, Pawn
-from samples.chessboard.objects import Knight
 
 # I put these in so my linter doesn't explode.
 try:
@@ -50,8 +48,9 @@ def square_color(i):
 
 
 class ChessboardDemo(ShowBase):
-    def __init__(self):
+    def __init__(self, client):
         ShowBase.__init__(self)
+        self.client = client
 
         # This code puts the standard title and instruction text on screen
         self.title = OnscreenText(text="Panda3D: Tutorial - Mouse Picking",
@@ -100,7 +99,7 @@ class ChessboardDemo(ShowBase):
 
         # For each square
         self.squares = [None for i in range(64)]
-        self.pieces = [None for i in range(64)]
+        self.pieces = [(None, None) for i in range(64)]
         for i in range(64):
             # Load, parent, color, and position the model (a single square
             # polygon)
@@ -137,12 +136,16 @@ class ChessboardDemo(ShowBase):
         temp = self.pieces[fr]
         self.pieces[fr] = self.pieces[to]
         self.pieces[to] = temp
-        if self.pieces[fr]:
-            self.pieces[fr].square = fr
-            self.pieces[fr].obj.setPos(square_pos(fr))
-        if self.pieces[to]:
-            self.pieces[to].square = to
-            self.pieces[to].obj.setPos(square_pos(to))
+        if self.pieces[fr][0]:
+            model, do = self.pieces[fr]
+            do.square = fr
+            model.setPos(square_pos(fr))
+            do.save(self.client)
+        if self.pieces[to][0]:
+            model, do = self.pieces[to]
+            do.square = to
+            model.setPos(square_pos(to))
+            do.save(self.client)
 
     def mouseTask(self, task):
         # This task deals with the highlighting and dragging based on the mouse
@@ -172,7 +175,8 @@ class ChessboardDemo(ShowBase):
                 # Same thing with the direction of the ray
                 nearVec = render.getRelativeVector(
                     camera, self.pickerRay.getDirection())
-                self.pieces[self.dragging].obj.setPos(
+                model, do = self.pieces[self.dragging]
+                model.setPos(
                     point_at_z(.5, nearPoint, nearVec))
 
             # Do the actual collision pass (Do it only on the squares for
@@ -192,7 +196,7 @@ class ChessboardDemo(ShowBase):
     def grab_piece(self):
         # If a square is highlighted and it has a piece, set it to dragging
         # mode
-        if self.hiSq is not False and self.pieces[self.hiSq]:
+        if self.hiSq is not False and self.pieces[self.hiSq][0]:
             self.dragging = self.hiSq
             self.hiSq = False
 
@@ -203,7 +207,8 @@ class ChessboardDemo(ShowBase):
         if self.dragging is not False:
             # We have let go of the piece, but we are not on a square
             if self.hiSq is False:
-                self.pieces[self.dragging].obj.setPos(
+                model, do = self.pieces[self.dragging]
+                model.setPos(
                     square_pos(self.dragging))
             else:
                 # Otherwise, swap the pieces

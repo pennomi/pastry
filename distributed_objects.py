@@ -80,6 +80,12 @@ class DistributedObject(metaclass=DistributedObjectMetaclass):
         # Must also have a zone. But we can't generate this one.
         assert self.zone, "DO must have a zone."
 
+    def save(self, client):
+        # TODO: Eventually only send the dirty state
+        self._saved_field_data.update(self._dirty_field_data)
+        self._dirty_field_data.clear()
+        client._send(self.serialize())
+
     def serialize(self):
         # TODO: This will eventually be a "save" method, which only serializes
         # the dirty state.
