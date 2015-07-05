@@ -99,7 +99,6 @@ class ChessboardDemo(ShowBase):
 
         # For each square
         self.squares = [None for i in range(64)]
-        self.pieces = [(None, None) for i in range(64)]
         for i in range(64):
             # Load, parent, color, and position the model (a single square
             # polygon)
@@ -131,21 +130,21 @@ class ChessboardDemo(ShowBase):
         self.accept("mouse1", self.grab_piece)  # left-click grabs a piece
         self.accept("mouse1-up", self.release_piece)  # releasing places it
 
-    # This function swaps the positions of two pieces
     def swap_pieces(self, fr, to):
-        temp = self.pieces[fr]
-        self.pieces[fr] = self.pieces[to]
-        self.pieces[to] = temp
-        if self.pieces[fr][0]:
-            model, do = self.pieces[fr]
-            do.square = fr
-            model.setPos(square_pos(fr))
-            do.save(self.client)
-        if self.pieces[to][0]:
-            model, do = self.pieces[to]
-            do.square = to
-            model.setPos(square_pos(to))
-            do.save(self.client)
+        # Get the objects from the square references
+        fr_model, fr_do = self.model_at(fr), self.piece_at(fr)
+        to_model, to_do = self.model_at(to), self.piece_at(to)
+
+        # Handle the from model
+        fr_model.setPos(square_pos(to))
+        fr_do.square = to
+        fr_do.save(self.client)
+
+        # Handle the to model if it exists
+        if to_do:
+            to_model.setPos(square_pos(fr))
+            to_do.square = fr
+            to_do.save(self.client)
 
     def mouseTask(self, task):
         # This task deals with the highlighting and dragging based on the mouse
@@ -175,12 +174,13 @@ class ChessboardDemo(ShowBase):
                 # Same thing with the direction of the ray
                 nearVec = render.getRelativeVector(
                     camera, self.pickerRay.getDirection())
-                model, do = self.pieces[self.dragging]
+                model = self.model_at(self.dragging)
                 model.setPos(
                     point_at_z(.5, nearPoint, nearVec))
 
             # Do the actual collision pass (Do it only on the squares for
             # efficiency purposes)
+            # noinspection PyArgumentList
             self.picker.traverse(self.square_root)
             if self.pq.getNumEntries() > 0:
                 # if we have hit something, sort the hits so that the closest
@@ -193,10 +193,22 @@ class ChessboardDemo(ShowBase):
 
         return Task.cont
 
+    def piece_at(self, square):
+        for p in self.client.objects:
+            if p.square == square:
+                return p
+        return None
+
+    def model_at(self, square):
+        for p in self.client.objects:
+            if p.square == square:
+                return self.client.models[p.id]
+        return None
+
     def grab_piece(self):
         # If a square is highlighted and it has a piece, set it to dragging
         # mode
-        if self.hiSq is not False and self.pieces[self.hiSq][0]:
+        if self.hiSq is not False and self.piece_at(self.hiSq):
             self.dragging = self.hiSq
             self.hiSq = False
 
@@ -207,7 +219,7 @@ class ChessboardDemo(ShowBase):
         if self.dragging is not False:
             # We have let go of the piece, but we are not on a square
             if self.hiSq is False:
-                model, do = self.pieces[self.dragging]
+                model = self.model_at(self.dragging)
                 model.setPos(
                     square_pos(self.dragging))
             else:

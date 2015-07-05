@@ -5,7 +5,7 @@ from settings import MAX_PACKET_SIZE
 from util import Channel
 
 
-class PastryClient():
+class PastryClient:
     _loop = None
     _reader = None
     _writer = None

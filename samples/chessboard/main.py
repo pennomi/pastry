@@ -1,7 +1,6 @@
 import asyncio
 import sys
 from uuid import uuid4
-import weakref
 from agent import PastryAgent
 from client import PastryClient
 from distributed_objects import DistributedObjectClassRegistry
@@ -35,8 +34,6 @@ class ChessClient(PastryClient):
         asyncio.async(self.run_panda())
 
     def object_created(self, obj):
-        print('objects:', len(self.objects))
-
         if obj.color == "white":
             color = WHITE
         elif obj.color == "black":
@@ -49,10 +46,12 @@ class ChessClient(PastryClient):
         model.reparentTo(render)
         model.setColor(color)
         model.setPos(square_pos(obj.square))
-        self.game.pieces[obj.square] = model, obj
+        #self.game.pieces[obj.square] = model, obj
 
-    def object_updated(self, distributed_object):
-        print('object updated:', distributed_object)
+    def object_updated(self, obj):
+        model = self.models[obj.id]
+        model.setPos(square_pos(obj.square))
+        # self.game.pieces[obj.square] = model, obj
 
     def object_deleted(self, distributed_object):
         print('objects:', len(self.objects))
