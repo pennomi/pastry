@@ -9,6 +9,7 @@ from agent import PastryAgent
 from client import PastryClient
 from distributed_objects import DistributedObject, Field, \
     DistributedObjectClassRegistry
+from util import Channel
 from zone import PastryZone
 
 
@@ -41,7 +42,8 @@ class ChatClient(PastryClient):
             m = Message(owner=self.account_id, text="Heartbeat", zone="chat")
             # TODO: I want this to be more "magical". Like `m.save()`
             # TODO: `m.distribute()`?
-            self._send(m.serialize())
+            c = Channel(target=m.zone, method="create")
+            self._send(c, m.serialize())
             yield from asyncio.sleep(5.0)
 
     def object_created(self, distributed_object):
@@ -54,7 +56,10 @@ class ChatClient(PastryClient):
         print('messages:', len(self.objects))
 
 
-class TestAgent(PastryAgent):
+class ChatAgent(PastryAgent):
+    log_color = "\033[93m"
+    log_name = "Agent"
+
     registry = CHAT_REGISTRY
 
     def authenticate(self, *args, **kwargs):
@@ -63,6 +68,9 @@ class TestAgent(PastryAgent):
 
 
 class ChatZone(PastryZone):
+    log_color = "\033[92m"
+    log_name = "Zone"
+
     registry = CHAT_REGISTRY
     zone_id = "chat"
 
@@ -71,13 +79,13 @@ class ChatZone(PastryZone):
     # TODO: Trigger -- On message create, rotate out (delete) any old messages
     # TODO: Trigger -- On entry and exit, display messages
     def object_created(self, obj: DistributedObject):
-        print("messages:", len(self.objects))
+        self.log("messages:", len(self.objects))
 
     def object_updated(self, obj: DistributedObject):
-        print(obj, "was updated.")
+        self.log(obj, "was updated.")
 
     def object_deleted(self, obj: DistributedObject):
-        print(obj, "was deleted.")
+        self.log(obj, "was deleted.")
 
 
 # TODO: A MultiServer that can run any number of registered Zone and Agent
@@ -85,16 +93,31 @@ class ChatZone(PastryZone):
 # the source.
 # You wouldn't deploy the MultiServer in production, but it'd be insanely
 # useful in development.
+class MultiServer:
+    def __init__(self, *server_classes):
+        self._loop = asyncio.get_event_loop()
+        self.servers = [c(loop=self._loop) for c in server_classes]
+
+    def run(self):
+        """Start each server process then run a complete event loop."""
+        for c in self.servers:
+            c.startup()
+
+        try:
+            self._loop.run_forever()
+        except KeyboardInterrupt:
+            pass
+
+        for c in self.servers:
+            c.shutdown()
 
 
 if __name__ == "__main__":
     thing = sys.argv[1]  # python main.py FOO
-    if thing == 'agent':
-        to_start = TestAgent()
+    if thing == 'server':
+        to_start = MultiServer(ChatZone, ChatAgent)
     elif thing == 'client':
         to_start = ChatClient()
-    elif thing == 'zone':
-        to_start = ChatZone()
     else:
-        raise ValueError('Must be agent, client or zone')
+        raise ValueError('Must be server or client')
     to_start.run()

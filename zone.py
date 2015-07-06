@@ -9,10 +9,10 @@ class PastryZone(InternalMessagingServer):
     it gets to the right people.
     """
     registry = None
-    zone_id = None
+    zone_id = ""
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, loop=None):
+        super().__init__(loop=loop)
 
         # Check that registry is set up
         if not self.registry:
@@ -21,7 +21,6 @@ class PastryZone(InternalMessagingServer):
         # Always listen for itself.
         if not self.zone_id:
             raise NotImplementedError("Must have a zone_id on the zone server")
-        # noinspection PyTypeChecker
         self.internal_subscribe(self.zone_id)
 
         # Set up the object state tracking
@@ -43,8 +42,8 @@ class PastryZone(InternalMessagingServer):
     def object_deleted(self, obj: DistributedObject):
         pass
 
-    def handle_internal_message(self, channel, message):
-        print("Received:", channel, message)
+    def _handle_internal_message(self, channel, message):
+        self.log("Received:", channel, message)
 
         if channel.method == "create":
             data = json.loads(message)
@@ -59,7 +58,7 @@ class PastryZone(InternalMessagingServer):
 
         elif channel.method == "join":
             # Someone just joined! Let's sync down our zone's state.
-            print("{} joined. Syncing server state ({} objects)".format(
+            self.log("{} joined. Syncing server state ({} objects)".format(
                 message, len(self.objects)))
             for o in self.objects:
                 output_channel = Channel(

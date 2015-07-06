@@ -12,14 +12,17 @@ class PastryClient:
     finished = False
     registry = None
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, loop=None):
+        if not loop:
+            loop = asyncio.get_event_loop()
+        self._loop = loop
         self.objects = DistributedObjectState(
             self.object_created, self.object_updated, self.object_deleted)
 
     def setup(self):
         raise NotImplementedError()
 
+    # These are to be overridden by the implementer of the Client
     def object_created(self, distributed_object: DistributedObject):
         pass
 
@@ -29,8 +32,8 @@ class PastryClient:
     def object_deleted(self, distributed_object: DistributedObject):
         pass
 
-    def handle_message(self, channel: Channel, data: str):
-        # TODO: Also handle updating and deleting DOs
+    def _handle_message(self, channel: Channel, data: str):
+        # TODO: Also handle deleting DOs
         print('Receiving:', channel, data)
         # TODO: A lot of this is repeated code on the client/zone. Can it be
         # generalized?
@@ -47,14 +50,15 @@ class PastryClient:
             self.objects.update(kwargs['id'], kwargs)
 
     # Core Functions
-    def subscribe(self, channel):
-        self._send("sub:{}".format(channel))
+    def subscribe(self, channel_name: str):
+        c = Channel(target=channel_name, method="subscribe")
+        self._send(c, "")
 
-    def unsubscribe(self, channel):
-        self._send("unsub:{}".format(channel))
+    def unsubscribe(self, channel_name: str):
+        c = Channel(target=channel_name, method="unsubscribe")
+        self._send(c, "")
 
     def run(self):
-        self._loop = asyncio.get_event_loop()
         self._loop.run_until_complete(self.establish_connection())
         try:
             self._loop.run_forever()
@@ -63,6 +67,8 @@ class PastryClient:
         self._loop.close()
 
     # TODO: Audit all functions for private vs public
+    # TODO: Make sure that the client can run the GUI even when not connected
+    # to the server
     @asyncio.coroutine
     def establish_connection(self):
         # Establish the socket
@@ -101,14 +107,15 @@ class PastryClient:
                 try:
                     message = json.loads(m.decode('utf8'))
                     c = Channel.parse(message['channel'])
-                    self.handle_message(c, message['data'])
+                    self._handle_message(c, message['data'])
                 except ValueError as e:
                     # Didn't get the full message, save for next time.
                     leftovers = m
 
-    def _send(self, data):
-        print('Sending:', data)
-        self._writer.write(data.encode() + b"\n")
+    def _send(self, channel: Channel, data: str):
+        print('Sending:', channel, data)
+        channel_data = str(channel).encode()
+        self._writer.write(channel_data + b"|" + data.encode() + b"\n")
 
     @asyncio.coroutine
     def close(self):

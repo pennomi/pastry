@@ -15,8 +15,8 @@ Note that Zone IDs are serialized in the DO anyway, so the duplication of the
 ZONE_ID in the channel serves entirely as an internal message pruning system.
 """
 # TODO: Should we mark the whispers specially, since they are unique?
-# TODO: Should this class move into an internal_messaging module with Redis?
 # TODO: Method should be an Enum
+# TODO: There are subscribe/unsubscribe on the client. Change to join/leave?
 
 
 class Channel:

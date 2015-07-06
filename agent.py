@@ -35,30 +35,37 @@ class PastryAgent(InternalMessagingServer):
     On one side a secure TCP socket talks to the client, and on the other side
     a Redis pubsub connection speaks with the entire internal network.
     """
-    loop = None
+    _loop = None
     connections = []
     finished = False
 
     def authenticate(self, *args, **kwargs) -> bool:
         raise NotImplementedError()
 
+    def startup(self):
+        coroutine = asyncio.start_server(
+            self._create_client_connection, '127.0.0.1', 8888, loop=self._loop)
+        self.server = self._loop.run_until_complete(coroutine)
+        super().startup()
+
     def run(self):
         """Start the server process."""
-        coroutine = asyncio.start_server(
-            self.create_client_connection, '127.0.0.1', 8888, loop=self.loop)
-        server = self.loop.run_until_complete(coroutine)
+        self.startup()
 
         # Serve requests until CTRL+c is pressed
-        print('Serving on {}'.format(server.sockets[0].getsockname()))
+        self.log('Serving on {}'.format(self.server.sockets[0].getsockname()))
         super().run()
 
         # Close the server
-        server.close()
-        self.loop.run_until_complete(server.wait_closed())
-        self.loop.close()
+        self.shutdown()
+
+    def shutdown(self):
+        self.server.close()
+        self._loop.run_until_complete(self.server.wait_closed())
+        self._loop.close()
 
     @asyncio.coroutine
-    def create_client_connection(self, reader, writer):
+    def _create_client_connection(self, reader, writer):
         """A unique instance of this coroutine is active for each connected
         client.
         """
@@ -79,79 +86,81 @@ class PastryAgent(InternalMessagingServer):
                 if not msg:  # They've disconnected
                     break
             except (asyncio.CancelledError, asyncio.TimeoutError):
-                print("Cancelled or Timeout")
+                self.log("Cancelled or Timeout")
                 raise
             except Exception as exc:
-                print("Something happened!", exc)
+                self.log("Something happened!", exc)
                 break
             # Handle the message
-            yield from self.read_message(connection, msg)
+            yield from self._read_message(connection, msg)
 
-        print("Close the socket for {}".format(connection))
+        self.log("Close the socket for {}".format(connection))
         writer.close()
         self.connections.remove(connection)
 
     @asyncio.coroutine
-    def read_message(self, sender: ClientConnection, data: bytes):
+    def _read_message(self, sender: ClientConnection, data: bytes):
         for d in [_ for _ in data.split(b'\n') if _]:
             # Decode the message
-            message = d.decode('utf8')
+            raw_message = d.decode('utf8')
+
+            input_channel, message = raw_message.split("|")
+            # TODO: Change this to join/leave and it becomes more elegant
+            channel = Channel.parse(input_channel)
 
             # Subscription requests
-            # TODO: Find a better
-            if message.startswith('sub:'):
-                zone_name = message[4:]
-                print("Subscribing", sender, "to", zone_name)
+            # TODO: Handle these channels properly
+            if channel.method == 'subscribe':
                 # TODO: Hang up on any requests that aren't permitted
                 # TODO: (ie. can't subscribe to any subchannels: no `.`s)
-                sender.subscriptions.append(zone_name)
-                self.internal_subscribe(zone_name)
+                self.log("Subscribing", sender, "to", channel.target)
+                sender.subscriptions.append(channel.target)
+                self.internal_subscribe(channel.target)
                 # Trigger the sync the state of the subscription
-                c = Channel(target=zone_name, method="join")
+                c = Channel(target=channel.target, method="join")
                 self.internal_broadcast(c, sender.id)
             # Unsubscription request. No permission necessary.
-            elif message.startswith('unsub:'):
-                print("Unsubscribing", sender, "from", d)
+            elif channel.method == 'unsubscribe':
+                self.log("Unsubscribing", sender, "from", d)
                 # TODO: Don't crash if it's not in the list
-                sender.subscriptions.remove(message[6:])
+                sender.subscriptions.remove(channel.target)
                 # TODO: Check all subscriptions to see if this is needed any
                 # more. Others might still be using it!
-                self.internal_unsubscribe(message[6:])
-                c = Channel(target=message[6:], method="leave")
+                self.internal_unsubscribe(channel.target)
+                # TODO: Trigger a delete state for the leaver
+                c = Channel(target=channel.target, method="leave")
                 self.internal_broadcast(c, sender.id)
             else:
                 # This is a non-pubsub message; forward to the do handler
-                yield from self.handle_client_message(sender, d)
+                yield from self._handle_client_message(sender, channel, message)
 
     @asyncio.coroutine
-    def handle_client_message(self, sender: ClientConnection, data: bytes):
+    def _handle_client_message(self, sender: ClientConnection,
+                               channel: Channel, message: str):
         # TODO: This should receive channels too?
-        message = data.decode('utf8')
         # Subscription requests are already handled; must be a
         # DistributedObject create/update/delete/call.
         # TODO: Check that the message is permitted; if not, kill.
-        print("Received `{}` from `{}`".format(data, sender))
+        self.log("Received `{}` from `{}`".format(message, sender))
         # Once we know the message is allowed, send it to the zone server
         # TODO: Creating objects on the client here. Probably need the client
         # to send channel data too
 
         # Handle an update message
         kwargs = json.loads(message)
-        channel = Channel(
-            target=kwargs["zone"], method="update")
         self.internal_broadcast(channel, message)
 
-    def handle_internal_message(self, channel, message):
+    def _handle_internal_message(self, channel, message):
         """Whenever the agent receives an internal message, it's forwarded
         to all relevant clients.
         """
-        asyncio.async(self.client_broadcast(channel, message))
+        asyncio.async(self.client_broadcast(channel, message), loop=self._loop)
 
     @asyncio.coroutine
     def client_broadcast(self, channel: Channel, data: str):
         connections = [c for c in self.connections if c.responds_to(channel)]
         # TODO: Handle channels better on the client itself
-        print("Sending: {} to {} connections".format(
+        self.log("Sending: {} to {} connections".format(
             data, len(connections)))
         to_send = json.dumps({
             "channel": str(channel),
@@ -162,5 +171,5 @@ class PastryAgent(InternalMessagingServer):
                 c.writer.write(to_send.encode() + b'\n')
                 yield from c.writer.drain()
             except ConnectionResetError:
-                print("Lost connection to {}. Killing...".format(c))
+                self.log("Lost connection to {}. Killing...".format(c))
                 self.connections.remove(c)
