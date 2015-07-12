@@ -83,15 +83,16 @@ class DistributedObject(metaclass=DistributedObjectMetaclass):
     def update(self, data):
         self._saved_field_data.update(data)
 
-    def save(self, client):
-        # TODO: Eventually only send the dirty state
-        self._saved_field_data.update(self._dirty_field_data)
-        self._dirty_field_data.clear()
-        client._send(self.serialize())
+    # def save(self, client):
+    #     # TODO: Eventually only send the dirty state
+    #     self._saved_field_data.update(self._dirty_field_data)
+    #     self._dirty_field_data.clear()
+    #     client._send(self.serialize())
 
     def serialize(self):
         # TODO: This will eventually be a "save" method, which only serializes
         # the dirty state.
+        # TODO: Always serialize id and zone, even if not dirty
         return json.dumps(self._saved_field_data)
 
 
@@ -124,7 +125,8 @@ class DistributedObjectState:
         self._instances.append(obj)
         self.create_callback(obj)
 
-    def update(self, obj_id: str, fields: dict):
+    def update(self, **fields: dict):
+        obj_id = fields['id']  # ID is always serialized
         obj = self[obj_id]
         obj.update(fields)
         self.update_callback(obj)

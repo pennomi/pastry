@@ -46,14 +46,13 @@ class PastryZone(InternalMessagingServer):
         self.log("Received:", channel, message)
 
         if channel.method == "create":
-            data = json.loads(message)
-            # An object was created! Add it like normal.
+            kwargs = json.loads(message)
             class_ = self.registry[channel.code_name]
-            self.objects.create(class_(**data))
+            self.objects.create(class_(**kwargs))
 
         elif channel.method == "update":
-            data = json.loads(message)
-            obj = self.objects.update(data['id'], data)
+            kwargs = json.loads(message)
+            obj = self.objects.update(**kwargs)
         # TODO: Delete, Call, Leave
 
         elif channel.method == "join":

@@ -18,6 +18,7 @@ ZONE_ID in the channel serves entirely as an internal message pruning system.
 # TODO: Method should be an Enum
 # TODO: There are subscribe/unsubscribe on the client. Change to join/leave?
 # TODO: Add a kill internal message that kills the USER_ID in question. Ouch.
+# TODO: Add an authenticate message for the client
 
 class Channel:
     """A classy representation of channels. This makes it easier

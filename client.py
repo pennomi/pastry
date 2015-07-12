@@ -32,9 +32,16 @@ class PastryClient:
     def object_deleted(self, distributed_object: DistributedObject):
         pass
 
+    def save(self, *objects: DistributedObject):
+        for o in objects:
+            # Build the channel
+            c = Channel(target=o.zone, method="create",
+                        code_name=o.__class__.__name__)
+            # Send via the network
+            self._send(c, o.serialize())
+
     def _handle_message(self, channel: Channel, data: str):
         # TODO: Also handle deleting DOs
-        print('Receiving:', channel, data)
         # TODO: A lot of this is repeated code on the client/zone. Can it be
         # generalized?
         if channel.method == 'create':
@@ -45,9 +52,7 @@ class PastryClient:
             self.objects.create(created_object)
         elif channel.method == 'update':
             kwargs = json.loads(data)
-            # TODO: Maybe the kwargs['id'] isn't necessary? We could force `id`
-            # and `zone` to always be serialized.
-            self.objects.update(kwargs['id'], kwargs)
+            self.objects.update(**kwargs)
 
     # Core Functions
     def subscribe(self, channel_name: str):
@@ -113,7 +118,6 @@ class PastryClient:
                     leftovers = m
 
     def _send(self, channel: Channel, data: str):
-        print('Sending:', channel, data)
         channel_data = str(channel).encode()
         self._writer.write(channel_data + b"|" + data.encode() + b"\n")
 
