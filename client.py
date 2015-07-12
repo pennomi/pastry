@@ -51,11 +51,11 @@ class PastryClient:
 
     # Core Functions
     def subscribe(self, channel_name: str):
-        c = Channel(target=channel_name, method="subscribe")
+        c = Channel(target=channel_name, method="join")
         self._send(c, "")
 
     def unsubscribe(self, channel_name: str):
-        c = Channel(target=channel_name, method="unsubscribe")
+        c = Channel(target=channel_name, method="leave")
         self._send(c, "")
 
     def run(self):

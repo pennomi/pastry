@@ -42,7 +42,8 @@ class ChatClient(PastryClient):
             m = Message(owner=self.account_id, text="Heartbeat", zone="chat")
             # TODO: I want this to be more "magical". Like `m.save()`
             # TODO: `m.distribute()`?
-            c = Channel(target=m.zone, method="create")
+            c = Channel(target=m.zone, method="create",
+                        code_name=m.__class__.__name__)
             self._send(c, m.serialize())
             yield from asyncio.sleep(5.0)
 

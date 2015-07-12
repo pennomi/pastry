@@ -105,31 +105,28 @@ class PastryAgent(InternalMessagingServer):
             raw_message = d.decode('utf8')
 
             input_channel, message = raw_message.split("|")
-            # TODO: Change this to join/leave and it becomes more elegant
             channel = Channel.parse(input_channel)
 
-            # Subscription requests
-            # TODO: Handle these channels properly
-            if channel.method == 'subscribe':
+            # Join requests
+            if channel.method == 'join':
                 # TODO: Hang up on any requests that aren't permitted
                 # TODO: (ie. can't subscribe to any subchannels: no `.`s)
-                self.log("Subscribing", sender, "to", channel.target)
+                # TODO: Also some channels are restricted to internal usage
+                self.log("Joining", sender, "to", channel.target)
                 sender.subscriptions.append(channel.target)
                 self.internal_subscribe(channel.target)
                 # Trigger the sync the state of the subscription
-                c = Channel(target=channel.target, method="join")
-                self.internal_broadcast(c, sender.id)
-            # Unsubscription request. No permission necessary.
-            elif channel.method == 'unsubscribe':
-                self.log("Unsubscribing", sender, "from", d)
+                self.internal_broadcast(channel, sender.id)
+            # Leave request. No permission necessary.
+            elif channel.method == 'leave':
+                self.log("Removing", sender, "from", d)
                 # TODO: Don't crash if it's not in the list
                 sender.subscriptions.remove(channel.target)
                 # TODO: Check all subscriptions to see if this is needed any
-                # more. Others might still be using it!
+                # more. Others are probably still using it!
                 self.internal_unsubscribe(channel.target)
                 # TODO: Trigger a delete state for the leaver
-                c = Channel(target=channel.target, method="leave")
-                self.internal_broadcast(c, sender.id)
+                self.internal_broadcast(channel, sender.id)
             else:
                 # This is a non-pubsub message; forward to the do handler
                 yield from self._handle_client_message(sender, channel, message)
