@@ -36,15 +36,17 @@ class DistributedObjectMetaclass(type):
             def make_getter(n):
                 def getter(self):
                     # Try to get from dirty, otherwise get from saved.
-                    return self._dirty_field_data.get(
-                        n, self._saved_field_data[n])
+                    try:
+                        return self._dirty_field_data[n]
+                    except KeyError:
+                        return self._saved_field_data[n]
                 getter.__name__ = n
                 return getter
 
             def make_setter(n):
                 def setter(self, value):
                     # TODO: run validators here (enforce types, etc.)
-                    self._saved_field_data[n] = value
+                    self._dirty_field_data[n] = value
                 setter.__name__ = n
                 return setter
 
@@ -71,8 +73,7 @@ class DistributedObject(metaclass=DistributedObjectMetaclass):
         self._saved_field_data = self._saved_field_data.copy()
 
         # Populate initial state from the kwargs
-        # TODO: This might be dirty data?
-        self._saved_field_data.update(zone=zone, **kwargs)
+        self._dirty_field_data.update(zone=zone, **kwargs)
 
         # We must have an id. If it wasn't specified, UUID it.
         self.id = kwargs.get('id', str(uuid4()))
@@ -80,20 +81,27 @@ class DistributedObject(metaclass=DistributedObjectMetaclass):
         # Must also have a zone. But we can't generate this one.
         assert self.zone, "DO must have a zone."
 
-    def update(self, data):
+    @property
+    def created(self):
+        # This must be brand new if the saved data is empty
+        return not self._saved_field_data
+
+    def _update(self, data):
+        # TODO: Nuke any keys in the dirty data that exist here.
         self._saved_field_data.update(data)
 
-    # def save(self, client):
-    #     # TODO: Eventually only send the dirty state
-    #     self._saved_field_data.update(self._dirty_field_data)
-    #     self._dirty_field_data.clear()
-    #     client._send(self.serialize())
+    def _save(self):
+        self._saved_field_data.update(self._dirty_field_data)
+        self._dirty_field_data.clear()
 
-    def serialize(self):
-        # TODO: This will eventually be a "save" method, which only serializes
-        # the dirty state.
-        # TODO: Always serialize id and zone, even if not dirty
-        return json.dumps(self._saved_field_data)
+    def serialize(self, for_create=False):
+        if for_create:
+            # Just send everything if we're creating this
+            return json.dumps(self._saved_field_data)
+
+        # Always serialize id and zone, even if not dirty
+        self._dirty_field_data.update(id=self.id, zone=self.zone)
+        return json.dumps(self._dirty_field_data)
 
 
 class DistributedObjectClassRegistry:
@@ -124,11 +132,12 @@ class DistributedObjectState:
         # TODO: Should the actual packet parsing happen here too?
         self._instances.append(obj)
         self.create_callback(obj)
+        obj._save()
 
     def update(self, **fields: dict):
         obj_id = fields['id']  # ID is always serialized
         obj = self[obj_id]
-        obj.update(fields)
+        obj._update(fields)
         self.update_callback(obj)
 
     def delete(self, obj_id: str):

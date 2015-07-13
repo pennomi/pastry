@@ -33,12 +33,18 @@ class PastryClient:
         pass
 
     def save(self, *objects: DistributedObject):
+        """Takes a list of distributed objects and sends them across the
+        network to be saved.
+        """
         for o in objects:
+            method = "update" if o.created else "create"
             # Build the channel
-            c = Channel(target=o.zone, method="create",
+            c = Channel(target=o.zone, method=method,
                         code_name=o.__class__.__name__)
             # Send via the network
             self._send(c, o.serialize())
+            # Move the dirty data over to the clean data
+            o._save()
 
     def _handle_message(self, channel: Channel, data: str):
         # TODO: Also handle deleting DOs
@@ -46,8 +52,7 @@ class PastryClient:
         # generalized?
         if channel.method == 'create':
             class_ = self.registry[channel.code_name]
-            kwargs = json.loads(data)
-            created_object = class_(**kwargs)
+            created_object = class_(**json.loads(data))
             # TODO: Maybe this should take in the registry or something
             self.objects.create(created_object)
         elif channel.method == 'update':

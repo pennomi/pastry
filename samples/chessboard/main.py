@@ -70,26 +70,17 @@ class ChessZone(PastryZone):
     zone_id = "chess-room-01"
 
     def setup(self):
-        # The order of pieces on a chessboard from white's perspective. This
-        # list contains the constructor functions for the piece classes defined
-        # below
+        # White's perspective
         piece_order = (Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook)
-
-        for i in range(8, 16):
-            # Load the white pawns
-            p = Pawn(zone=self.zone_id, square=i, color="white")
-            self.objects.create(p)
-        for i in range(48, 56):
-            # load the black pawns
-            p = Pawn(zone=self.zone_id, square=i, color="black")
-            self.objects.create(p)
-        for i in range(8):
-            # Load the special pieces for the front row and color them white
-            p = piece_order[i](zone=self.zone_id, square=i, color="white")
-            self.objects.create(p)
-            # Load the special pieces for the back row and color them black
-            p = piece_order[i](zone=self.zone_id, square=i+56, color="black")
-            self.objects.create(p)
+        # Convenient kwargs
+        white = {"color": "white", "zone": self.zone_id}
+        black = {"color": "black", "zone": self.zone_id}
+        self.save(*(
+            [Pawn(square=i, **white) for i in range(8, 16)] +
+            [Pawn(square=i, **black) for i in range(48, 56)] +
+            [piece_order[i](square=i, **white)for i in range(8)] +
+            [piece_order[i](square=i, **black)for i+56 in range(8)]
+        ))
 
     def object_created(self, obj):
         print("objects:", len(self.objects))

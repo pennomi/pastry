@@ -40,7 +40,7 @@ class ChatClient(PastryClient):
         while not self.finished:
             m = Message(owner=self.account_id, text="Heartbeat", zone="chat")
             self.save(m)
-            yield from asyncio.sleep(5.0)
+            yield from asyncio.sleep(3.0)
 
     def object_created(self, distributed_object):
         print(distributed_object.owner, distributed_object.text)

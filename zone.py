@@ -30,6 +30,18 @@ class PastryZone(InternalMessagingServer):
         # Run any game-specific logic
         self.setup()
 
+    def save(self, *objects):
+        for o in objects:
+            self.objects.create(o)
+            method = "update" if o.created else "create"
+            # Build the channel
+            c = Channel(target=o.zone, method="create",
+                        code_name=o.__class__.__name__)
+            # Send via the network
+            self.internal_broadcast(c, o.serialize())
+            # Move the dirty data over to the clean data
+            o._save()
+
     def setup(self):
         pass
 
@@ -64,4 +76,5 @@ class PastryZone(InternalMessagingServer):
                     # The message here is the user's ID.
                     target=message, method="create",
                     code_name=o.__class__.__name__)
-                self.internal_broadcast(output_channel, o.serialize())
+                self.internal_broadcast(
+                    output_channel, o.serialize(for_create=True))
