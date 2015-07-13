@@ -9,6 +9,7 @@ from agent import PastryAgent
 from client import PastryClient
 from distributed_objects import DistributedObject, Field, \
     DistributedObjectClassRegistry
+from multiserver import MultiServer
 from zone import PastryZone
 
 
@@ -68,39 +69,13 @@ class ChatZone(PastryZone):
     # TODO: Trigger -- On message create, rotate out (delete) any old messages
     # TODO: Trigger -- On join and leave, display messages
     def object_created(self, obj: DistributedObject):
-        self.log("messages:", len(self.objects))
+        pass
 
     def object_updated(self, obj: DistributedObject):
         self.log(obj, "was updated.")
 
     def object_deleted(self, obj: DistributedObject):
         self.log(obj, "was deleted.")
-
-
-class MultiServer:
-    """Run several backend server instances in one go. You really shouldn't
-    use this in production, but it's quite useful in development.
-
-    Example usage:
-    m = MultiServer(MyZone1, MyZone2, MyZone3, MyAgent)
-    m.run()
-    """
-    def __init__(self, *server_classes):
-        self._loop = asyncio.get_event_loop()
-        self.servers = [c(loop=self._loop) for c in server_classes]
-
-    def run(self):
-        """Start each server process then run a complete event loop."""
-        for c in self.servers:
-            c.startup()
-
-        try:
-            self._loop.run_forever()
-        except KeyboardInterrupt:
-            print("\nKeyboard Interrupt: shutting down...")
-
-        for c in self.servers:
-            c.shutdown()
 
 
 if __name__ == "__main__":
