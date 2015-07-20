@@ -19,17 +19,17 @@ class DistributedObjectMetaclass(type):
 
             # initialize the data in a type-specific way
             if thing.t == int:
-                attrs['_saved_field_data'][name] = 0
+                attrs['_dirty_field_data'][name] = 0
             elif thing.t == float:
-                attrs['_saved_field_data'][name] = 0.0
+                attrs['_dirty_field_data'][name] = 0.0
             elif thing.t == str:
-                attrs['_saved_field_data'][name] = ""
+                attrs['_dirty_field_data'][name] = ""
             elif thing.t == bytes:
-                attrs['_saved_field_data'][name] = b""
+                attrs['_dirty_field_data'][name] = b""
             elif thing.t == bool:
-                attrs['_saved_field_data'][name] = False
+                attrs['_dirty_field_data'][name] = False
             else:
-                attrs['_saved_field_data'][name] = None
+                attrs['_dirty_field_data'][name] = None
 
             # Create properties only for the specified fields.
             # We don't want to override global get/set behavior.

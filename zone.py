@@ -61,7 +61,7 @@ class PastryZone(InternalMessagingServer):
         pass
 
     def _handle_internal_message(self, channel, message):
-        self.log("Received:", channel, message)
+        self.log("Received", channel)
 
         if channel.method == "create":
             kwargs = json.loads(message)

@@ -138,7 +138,7 @@ class PastryAgent(InternalMessagingServer):
         # Subscription requests are already handled; must be a
         # DistributedObject create/update/delete/call.
         # TODO: Check that the message is permitted; if not, kill.
-        self.log("Received `{}` from `{}`".format(message, sender))
+        self.log("Received {} from {}".format(channel, sender))
         # Once we know the message is allowed, send it to the zone server
         # TODO: Creating objects on the client here. Probably need the client
         # to send channel data too
