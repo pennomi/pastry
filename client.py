@@ -38,9 +38,10 @@ class PastryClient:
         """
         for o in objects:
             method = "update" if o.created else "create"
+
             # Build the channel
             c = Channel(target=o.zone, method=method,
-                        code_name=o.__class__.__name__)
+                        code_name=None if o.created else o.__class__.__name__)
             # Send via the network
             self._send(c, o.serialize())
             # Move the dirty data over to the clean data

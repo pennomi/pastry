@@ -32,13 +32,19 @@ class PastryZone(InternalMessagingServer):
 
     def save(self, *objects):
         for o in objects:
-            self.objects.create(o)
             method = "update" if o.created else "create"
+
             # Build the channel
-            c = Channel(target=o.zone, method="create",
-                        code_name=o.__class__.__name__)
+            c = Channel(target=o.zone, method=method,
+                        code_name=None if o.created else o.__class__.__name__)
+
+            # Add it locally immediately
+            if method == "create":
+                self.objects.create(o)
+
             # Send via the network
-            self.internal_broadcast(c, o.serialize())
+            self.internal_broadcast(c, o.serialize(
+                for_create=method == "create"))
             # Move the dirty data over to the clean data
             o._save()
 

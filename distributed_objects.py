@@ -82,12 +82,12 @@ class DistributedObject(metaclass=DistributedObjectMetaclass):
         assert self.zone, "DO must have a zone."
 
     @property
-    def created(self):
-        # This must be brand new if the saved data is empty
-        return not self._saved_field_data
+    def created(self) -> bool:
+        # This is only new is saved fields are not yet initialized
+        return bool(self._saved_field_data)
 
     def _update(self, data):
-        # TODO: Nuke any keys in the dirty data that exist here.
+        # TODO: Nuke any keys in the dirty data that exist here?
         self._saved_field_data.update(data)
 
     def _save(self):
@@ -130,6 +130,13 @@ class DistributedObjectState:
 
     def create(self, obj: DistributedObject):
         # TODO: Should the actual packet parsing happen here too?
+
+        # If the object already exists, just update it
+        to_update = self.get(obj.id)
+        if to_update:
+            to_update._update(obj._dirty_field_data)
+            return
+
         self._instances.append(obj)
         self.create_callback(obj)
         obj._save()
@@ -144,6 +151,12 @@ class DistributedObjectState:
         obj = self[obj_id]
         self._instances.remove(obj)
         self.delete_callback(obj)
+
+    def get(self, object_id, default=None):
+        try:
+            return self[object_id]
+        except IndexError:
+            return default
 
     def __getitem__(self, object_id: str):
         for o in self._instances:

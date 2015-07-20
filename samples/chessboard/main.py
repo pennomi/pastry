@@ -81,12 +81,13 @@ class ChessZone(PastryZone):
         # Convenient kwargs
         white = {"color": "white", "zone": self.zone_id}
         black = {"color": "black", "zone": self.zone_id}
-        self.save(*(
+        pieces = (
             [Pawn(square=i, **white) for i in range(8, 16)] +
             [Pawn(square=i, **black) for i in range(48, 56)] +
             [piece_order[i](square=i, **white) for i in range(8)] +
             [piece_order[i](square=i+56, **black) for i in range(8)]
-        ))
+        )
+        self.save(*pieces)
 
     def object_created(self, obj):
         print("objects:", len(self.objects))
