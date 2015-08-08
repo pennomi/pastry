@@ -2,6 +2,9 @@ import json
 from uuid import uuid4
 
 
+# TODO: A Keyframe field type that will let us combo a timestamp/value
+
+
 class Field:
     def __init__(self, property_type):
         self.t = property_type

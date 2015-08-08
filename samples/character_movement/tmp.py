@@ -1,0 +1,323 @@
+# TODO: Roadmap:
+# * Get Sinbad walking on the ground
+# * Movement via targets and timestamps
+# * Multiplayer via Pastry
+
+
+import builtins
+from panda3d.core import CollisionRay, CollisionTraverser, GeomNode, BitMask32,\
+    CollisionNode, Point3, Vec3, CompassEffect, CollisionHandlerQueue, Point2, \
+    NodePath, CollisionHandlerFloor, CollideMask, CollisionEntry
+
+import direct.directbase.DirectStart
+from direct.task import Task
+from direct.actor import Actor
+from direct.interval import LerpInterval as LERP
+from direct.fsm import FSM
+from direct.showbase.DirectObject import DirectObject
+from time import time as now
+
+
+# Make the linter happy
+base = builtins.base
+render = builtins.render
+camera = builtins.camera
+loader = builtins.loader
+taskMgr = builtins.taskMgr
+messenger = builtins.messenger
+globalClock = builtins.globalClock
+
+
+COLLISION_TRAVERSER = CollisionTraverser()
+# Collision detection fails if objects move too fast. Fluid move fixes it.
+COLLISION_TRAVERSER.setRespectPrevTransform(1)
+COLLISION_HANDLER = CollisionHandlerQueue()
+
+PICKER_NODE = CollisionNode('mouse_ray')
+PICKER_NODEPATH = camera.attachNewNode(PICKER_NODE)
+PICKER_NODE.setFromCollideMask(GeomNode.getDefaultCollideMask())
+PICKER_RAY = CollisionRay()
+PICKER_NODE.addSolid(PICKER_RAY)
+COLLISION_TRAVERSER.add_collider(PICKER_NODEPATH, COLLISION_HANDLER)
+
+FLOOR_NODE = CollisionNode('floor_ray')
+FLOOR_NODEPATH = render.attachNewNode(FLOOR_NODE)
+FLOOR_NODE.setFromCollideMask(GeomNode.getDefaultCollideMask())
+FLOOR_RAY = CollisionRay()
+FLOOR_NODE.addSolid(FLOOR_RAY)
+COLLISION_TRAVERSER.add_collider(FLOOR_NODEPATH, COLLISION_HANDLER)
+
+
+def clamp(v, minimum, maximum):
+    return max(minimum, min(v, maximum))
+
+
+# TODO: Remove this
+class Controls(DirectObject):
+    def __init__(self, keybindings=None, translation=None, activate=True):
+        super().__init__()
+        if not translation:
+            translation = {}
+        if not keybindings:
+            keybindings = {}
+        self.controls = {}
+        self.state_bindings(keybindings, False)
+        self.eventBindings(translation, False)
+        if activate:  # bind controls by default
+            self.bindControls()
+
+    def state_bindings(self, keybindings, activate=True):
+        self.keybindings = keybindings.copy()
+        self.controls = {}  # blank the self.controls in preparation for re-bind
+        for k in self.keybindings.keys():
+            self.controls[k] = False
+        if activate:  # re-bind the controls by default
+            self.bindControls()
+
+    def eventBindings(self, translation, activate=True):
+        self.translation = translation.copy()
+        if activate:  # re-bind the controls by default
+            self.bindControls()
+
+    def _translator(self, control, *params):
+        if params:
+            messenger.send(control, list(params))
+        else:
+            messenger.send(control)
+
+    def bindControls(self):
+        """Map the controls to the keys that activate them."""
+        self.ignoreAll()
+        for k, events in self.translation.items():
+            for v in events:
+                self.accept(v, self._translator, [k, ])
+        for control, boardkeys in self.keybindings.items():
+            for key in boardkeys:
+                self.acceptOnce(key, self._keyOn, [control, ])  # don't repeat
+                self.accept(key + '-up', self._keyOff, [control, key])
+
+    def _keyOn(self, control):
+        self.controls[control] = True  # set control to active
+
+    def _keyOff(self, control, event):
+        self.controls[control] = False  # set control to off
+        self.acceptOnce(event, self._keyOn, [control, ])  # listen once again
+
+
+con = Controls(
+    translation={
+        'zoom in': ['wheel_up', 'arrow_up'],
+        'zoom out': ['wheel_down', 'arrow_down'],
+        'click': ['mouse1', 'mouse3'],
+    }
+)
+
+
+class Keyframe:
+    """Track a value relative to some time. When multiple Keyframes are put
+    together, you can create a lovely smooth path, even with network latency.
+    """
+    def __init__(self, value, time=None):
+        self.value = value
+        if not time:
+            time = now()
+        self.time = time
+
+
+# TODO: FSM? We don't need no FSM.
+class Avatar(FSM.FSM):
+    def __init__(self, initial_position=Point3.zero(), speed=3):
+        self.start_kf = Keyframe(initial_position, time=now())
+        self.end_kf = Keyframe(initial_position, time=now())
+
+        self.speed = speed  # moving speed
+        self.vel = Vec3.zero()  # velocity
+        # You must call FSM init if you override init.
+        FSM.FSM.__init__(self, 'avatar')
+        # Avatar scene graph setup
+        self.prime = NodePath('avatar prime')
+        self.prime.reparentTo(render)  # Make Avatar visible.
+        self.prime.setZ(5)  # Be sure to start above the floor.
+        self.prime.setCollideMask(BitMask32.allOff())  # no collisions!
+
+        # Prepare animation state
+        self.myActor = Actor.Actor('models/Sinbad', {
+            "runTop": "models/Sinbad-RunTop",
+            "runBottom": "models/Sinbad-RunBase",
+            "dance": "models/Sinbad-Dance.001",
+            "idle": "models/Sinbad-IdleTop",
+        })
+        self.myActor.setHprScale(*(180, 0, 0, .2, .2, .2))
+        self.myActor.reparentTo(self.prime)
+        self.request('Stand')
+
+    def update(self, dt):
+        # Calculate the position I should be based off of speed and time
+        travel_vector = (self.end_kf.value - self.start_kf.value)
+        percent_complete = 1 - (self.end_kf.time - now()) / (self.end_kf.time - self.start_kf.time)
+        if percent_complete > 1:
+            self.request("Stand")
+            return
+        current_pos = self.start_kf.value + travel_vector * percent_complete
+        self.prime.setX(current_pos.x)
+        self.prime.setY(current_pos.y)
+        # self.prime.setFluidPos(current_pos)
+
+    def set_destination(self, point):
+        ds = self.prime.get_pos() - point
+        arrival_seconds = ds.length() / self.speed
+        self.start_kf = Keyframe(self.prime.get_pos())
+        self.end_kf = Keyframe(point, now() + arrival_seconds)
+        self.request('Run')
+
+    def enterRun(self):
+        # TODO: Make Sinbad do half-body animations
+        # actor.makeSubpart("legs", ["Left Thigh", "Right Thigh"])
+        # actor.makeSubpart("torso", ["Head"], ["Left Thigh", "Right Thigh"])
+        # actor.loop("walk", partName="legs")
+        # actor.loop("reload", partName="torso")
+        self.myActor.loop('runBottom')
+
+    def exitRun(self):
+        self.myActor.stop("runBottom")
+
+    def enterStand(self):
+        if "idle" not in self.myActor.getAnimNames():
+            self.myActor.loop("idle")
+
+
+class Environment:
+    def __init__(self):
+        self.prime = loader.loadModel("models/level1")
+        self.prime.reparentTo(render)
+
+
+class Marker:
+    def __init__(self):
+        # you probably want to use a different marker model
+        self.prime = loader.loadModel('models/Sinbad')
+        self.prime.reparentTo(render)
+        self.prime.setScale(.05, .05, .05)
+        self.prime.setCollideMask(BitMask32.allOff())
+
+
+class EdgeScreenTracker(DirectObject):
+    """Mouse camera control interface."""
+
+    def __init__(self, avatar, offset=Point3.zero(), dist=10, rot=20,
+                 zoom=(2, 20), pitch=(-80, -10)):
+        super().__init__()
+        base.disableMouse()
+        self.zoomLvl = dist
+        self.speed = 1.0 / rot
+        self.zoomClamp = zoom
+        self.clampP = pitch
+        self.target = avatar.attachNewNode('camera target')
+        self.target.setPos(offset)
+        self.target.node().setEffect(CompassEffect.make(render))
+        camera.reparentTo(self.target)
+        camera.setPos(0, -self.zoomLvl, 0)
+        self.rotateCam(Point2(0, 0))
+        self.accept('zoom in', self.cameraZoom, [0.7])
+        self.accept('zoom out', self.cameraZoom, [1.3])
+        taskMgr.add(self.mousecam_task, "mousecam_task")
+
+    def mousecam_task(self, task):
+        self.setDist()
+        camera.lookAt(self.target)
+        if not base.mouseWatcherNode.hasMouse():
+            return Task.cont
+
+        # Handle border-panning
+        mpos = base.mouseWatcherNode.getMouse()
+        if mpos.getX() > 0.99:
+            self.rotateCam(Point2(-10, 0))
+        elif mpos.getX() < -0.99:
+            self.rotateCam(Point2(10, 0))
+        if mpos.getY() > 0.9:
+            self.rotateCam(Point2(0, -3))
+        elif mpos.getY() < -0.9:
+            self.rotateCam(Point2(0, 3))
+        return Task.cont  # loop again.
+
+    def rotateCam(self, arc):
+        newP = clamp(self.target.getP() - arc.getY(), *self.clampP)  # Clamped.
+        newH = self.target.getH() + arc.getX()  # Not clamped, just added.
+        LERP.LerpHprInterval(
+            self.target, self.speed, Vec3(newH, newP, self.target.getR())
+        ).start()
+
+    def cameraZoom(self, zoomFactor, ):
+        """Scale and clamp zoom level, then set distance by it."""
+        self.zoomLvl = clamp(self.zoomLvl * zoomFactor, *self.zoomClamp)
+        self.setDist()
+
+    def setDist(self):
+        """Maintain a constant distance to the target."""
+        vec = camera.getPos()
+        vec.normalize()
+        vec *= self.zoomLvl
+        camera.setFluidPos(vec)
+
+
+class World(DirectObject):
+    def __init__(self):
+        super().__init__()
+        self.avatar = Avatar()
+        self.blorp = Environment()
+        self.environ = self.blorp.prime
+        self.marker = Marker().prime
+        EdgeScreenTracker(self.avatar.prime, Point3(0, 0, 1))
+        self.pickerRay = CollisionRay()
+        PICKER_NODE.addSolid(self.pickerRay)
+        self.accept('click', self.on_click)  # translated
+        COLLISION_TRAVERSER.showCollisions(render)
+        self.last = 0  # for calculating dt in gameLoop
+        taskMgr.add(self.game_loop, "game_loop")  # start the gameLoop task
+
+    def on_click(self):
+        """Handle the click event."""
+        mpos = base.mouseWatcherNode.getMouse()  # mouse's screen coordinates
+        self.pickerRay.setFromLens(base.camNode, mpos.getX(), mpos.getY())
+
+        COLLISION_TRAVERSER.traverse(render)
+        for i in range(COLLISION_HANDLER.getNumEntries()):
+            COLLISION_HANDLER.sortEntries()  # get the closest object
+            pickedObj = COLLISION_HANDLER.getEntry(i).getIntoNodePath()
+            picker = COLLISION_HANDLER.getEntry(i).getFromNodePath()
+            print(picker.getName())
+            if picker.getName() != 'mouse_ray':
+                continue
+            point = COLLISION_HANDLER.getEntry(i).getSurfacePoint(render)
+            self.marker.setPos(point)
+            self.avatar.set_destination(point)
+            break
+
+    def game_loop(self, task):
+        dt = task.time - self.last
+        self.last = task.time
+        self.avatar.update(dt)
+
+        # Update avatar z pos
+        FLOOR_RAY.setOrigin(self.avatar.prime.getX(), self.avatar.prime.getY(), 6)
+        FLOOR_RAY.setDirection(0, 0, -1)
+        COLLISION_TRAVERSER.traverse(render)
+        for i in range(COLLISION_HANDLER.getNumEntries()):
+            COLLISION_HANDLER.sortEntries()  # get the closest object
+            pickedObj = COLLISION_HANDLER.getEntry(i).getIntoNodePath()
+            point = COLLISION_HANDLER.getEntry(i).getSurfacePoint(render)
+            picker = COLLISION_HANDLER.getEntry(i).getFromNodePath()
+            print(picker.getName())
+            if picker.getName() != 'floor_ray' and pickedObj.getName() != 'plane':
+                continue
+            print(self.avatar.prime.get_pos())
+            self.marker.setPos(point)
+            print("Yo", pickedObj, point, self.pickerRay.get_origin(), self.pickerRay.get_direction())
+            self.avatar.prime.setZ(point.z)
+            continue
+
+        return direct.task.Task.cont
+
+
+w = World()
+base.run()
