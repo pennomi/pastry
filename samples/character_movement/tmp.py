@@ -7,7 +7,7 @@
 import builtins
 from panda3d.core import CollisionRay, CollisionTraverser, GeomNode, BitMask32,\
     CollisionNode, Point3, Vec3, CompassEffect, CollisionHandlerQueue, Point2, \
-    NodePath, CollisionHandlerFloor, CollideMask, CollisionEntry
+    NodePath
 
 import direct.directbase.DirectStart
 from direct.task import Task
@@ -28,24 +28,28 @@ messenger = builtins.messenger
 globalClock = builtins.globalClock
 
 
-COLLISION_TRAVERSER = CollisionTraverser()
-# Collision detection fails if objects move too fast. Fluid move fixes it.
-COLLISION_TRAVERSER.setRespectPrevTransform(1)
-COLLISION_HANDLER = CollisionHandlerQueue()
-
+# Mouse collider
+PICKER_COLLISION_TRAVERSER = CollisionTraverser()
+PICKER_COLLISION_TRAVERSER.setRespectPrevTransform(1)
+PICKER_COLLISION_HANDLER = CollisionHandlerQueue()
 PICKER_NODE = CollisionNode('mouse_ray')
 PICKER_NODEPATH = camera.attachNewNode(PICKER_NODE)
 PICKER_NODE.setFromCollideMask(GeomNode.getDefaultCollideMask())
 PICKER_RAY = CollisionRay()
 PICKER_NODE.addSolid(PICKER_RAY)
-COLLISION_TRAVERSER.add_collider(PICKER_NODEPATH, COLLISION_HANDLER)
+PICKER_COLLISION_TRAVERSER.add_collider(PICKER_NODEPATH, PICKER_COLLISION_HANDLER)
 
+
+# Floor collider
+FLOOR_COLLISION_TRAVERSER = CollisionTraverser()
+FLOOR_COLLISION_TRAVERSER.setRespectPrevTransform(1)
+FLOOR_COLLISION_HANDLER = CollisionHandlerQueue()
 FLOOR_NODE = CollisionNode('floor_ray')
 FLOOR_NODEPATH = render.attachNewNode(FLOOR_NODE)
 FLOOR_NODE.setFromCollideMask(GeomNode.getDefaultCollideMask())
 FLOOR_RAY = CollisionRay()
 FLOOR_NODE.addSolid(FLOOR_RAY)
-COLLISION_TRAVERSER.add_collider(FLOOR_NODEPATH, COLLISION_HANDLER)
+FLOOR_COLLISION_TRAVERSER.add_collider(FLOOR_NODEPATH, FLOOR_COLLISION_HANDLER)
 
 
 def clamp(v, minimum, maximum):
@@ -271,7 +275,7 @@ class World(DirectObject):
         self.pickerRay = CollisionRay()
         PICKER_NODE.addSolid(self.pickerRay)
         self.accept('click', self.on_click)  # translated
-        COLLISION_TRAVERSER.showCollisions(render)
+        PICKER_COLLISION_TRAVERSER.showCollisions(render)
         self.last = 0  # for calculating dt in gameLoop
         taskMgr.add(self.game_loop, "game_loop")  # start the gameLoop task
 
@@ -280,18 +284,18 @@ class World(DirectObject):
         mpos = base.mouseWatcherNode.getMouse()  # mouse's screen coordinates
         self.pickerRay.setFromLens(base.camNode, mpos.getX(), mpos.getY())
 
-        COLLISION_TRAVERSER.traverse(render)
-        for i in range(COLLISION_HANDLER.getNumEntries()):
-            COLLISION_HANDLER.sortEntries()  # get the closest object
-            pickedObj = COLLISION_HANDLER.getEntry(i).getIntoNodePath()
-            picker = COLLISION_HANDLER.getEntry(i).getFromNodePath()
-            print(picker.getName())
-            if picker.getName() != 'mouse_ray':
-                continue
-            point = COLLISION_HANDLER.getEntry(i).getSurfacePoint(render)
-            self.marker.setPos(point)
-            self.avatar.set_destination(point)
-            break
+        PICKER_COLLISION_TRAVERSER.traverse(render)
+        for i in range(PICKER_COLLISION_HANDLER.getNumEntries()):
+            PICKER_COLLISION_HANDLER.sortEntries()  # get the closest object
+            pickedObj = PICKER_COLLISION_HANDLER.getEntry(i).getIntoNodePath()
+            picker = PICKER_COLLISION_HANDLER.getEntry(i).getFromNodePath()
+            # For now all we care about is clicking on the ground
+            # We could just ignore this check to get any clicked object
+            if pickedObj.getName() == 'Plane':
+                point = PICKER_COLLISION_HANDLER.getEntry(i).getSurfacePoint(render)
+                self.marker.setPos(point)
+                self.avatar.set_destination(point)
+                break
 
     def game_loop(self, task):
         dt = task.time - self.last
@@ -301,20 +305,16 @@ class World(DirectObject):
         # Update avatar z pos
         FLOOR_RAY.setOrigin(self.avatar.prime.getX(), self.avatar.prime.getY(), 6)
         FLOOR_RAY.setDirection(0, 0, -1)
-        COLLISION_TRAVERSER.traverse(render)
-        for i in range(COLLISION_HANDLER.getNumEntries()):
-            COLLISION_HANDLER.sortEntries()  # get the closest object
-            pickedObj = COLLISION_HANDLER.getEntry(i).getIntoNodePath()
-            point = COLLISION_HANDLER.getEntry(i).getSurfacePoint(render)
-            picker = COLLISION_HANDLER.getEntry(i).getFromNodePath()
-            print(picker.getName())
-            if picker.getName() != 'floor_ray' and pickedObj.getName() != 'plane':
-                continue
-            print(self.avatar.prime.get_pos())
-            self.marker.setPos(point)
-            print("Yo", pickedObj, point, self.pickerRay.get_origin(), self.pickerRay.get_direction())
-            self.avatar.prime.setZ(point.z)
-            continue
+        FLOOR_COLLISION_TRAVERSER.traverse(render)
+        for i in range(FLOOR_COLLISION_HANDLER.getNumEntries()):
+            FLOOR_COLLISION_HANDLER.sortEntries()  # get the closest object
+            pickedObj = FLOOR_COLLISION_HANDLER.getEntry(i).getIntoNodePath()
+            point = FLOOR_COLLISION_HANDLER.getEntry(i).getSurfacePoint(render)
+            picker = FLOOR_COLLISION_HANDLER.getEntry(i).getFromNodePath()
+            if pickedObj.getName() == 'Plane':
+                self.marker.setPos(point)
+                self.avatar.prime.setZ(point.z)
+                break
 
         return direct.task.Task.cont
 
