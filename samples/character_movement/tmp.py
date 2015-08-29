@@ -13,7 +13,6 @@ import direct.directbase.DirectStart
 from direct.task import Task
 from direct.actor import Actor
 from direct.interval import LerpInterval as LERP
-from direct.fsm import FSM
 from direct.showbase.DirectObject import DirectObject
 from time import time as now
 
@@ -30,7 +29,6 @@ globalClock = builtins.globalClock
 
 # Mouse collider
 PICKER_COLLISION_TRAVERSER = CollisionTraverser()
-PICKER_COLLISION_TRAVERSER.setRespectPrevTransform(1)
 PICKER_COLLISION_HANDLER = CollisionHandlerQueue()
 PICKER_NODE = CollisionNode('mouse_ray')
 PICKER_NODEPATH = camera.attachNewNode(PICKER_NODE)
@@ -42,7 +40,6 @@ PICKER_COLLISION_TRAVERSER.add_collider(PICKER_NODEPATH, PICKER_COLLISION_HANDLE
 
 # Floor collider
 FLOOR_COLLISION_TRAVERSER = CollisionTraverser()
-FLOOR_COLLISION_TRAVERSER.setRespectPrevTransform(1)
 FLOOR_COLLISION_HANDLER = CollisionHandlerQueue()
 FLOOR_NODE = CollisionNode('floor_ray')
 FLOOR_NODEPATH = render.attachNewNode(FLOOR_NODE)
@@ -95,8 +92,8 @@ class Controls(DirectObject):
         for k, events in self.translation.items():
             for v in events:
                 self.accept(v, self._translator, [k, ])
-        for control, boardkeys in self.keybindings.items():
-            for key in boardkeys:
+        for control, keys in self.keybindings.items():
+            for key in keys:
                 self.acceptOnce(key, self._keyOn, [control, ])  # don't repeat
                 self.accept(key + '-up', self._keyOff, [control, key])
 
@@ -128,16 +125,14 @@ class Keyframe:
         self.time = time
 
 
-# TODO: FSM? We don't need no FSM.
-class Avatar(FSM.FSM):
+class Avatar:
     def __init__(self, initial_position=Point3.zero(), speed=3):
         self.start_kf = Keyframe(initial_position, time=now())
         self.end_kf = Keyframe(initial_position, time=now())
 
         self.speed = speed  # moving speed
         self.vel = Vec3.zero()  # velocity
-        # You must call FSM init if you override init.
-        FSM.FSM.__init__(self, 'avatar')
+
         # Avatar scene graph setup
         self.prime = NodePath('avatar prime')
         self.prime.reparentTo(render)  # Make Avatar visible.
@@ -153,28 +148,27 @@ class Avatar(FSM.FSM):
         })
         self.myActor.setHprScale(*(180, 0, 0, .2, .2, .2))
         self.myActor.reparentTo(self.prime)
-        self.request('Stand')
+        self.stand()
 
     def update(self, dt):
         # Calculate the position I should be based off of speed and time
         travel_vector = (self.end_kf.value - self.start_kf.value)
         percent_complete = 1 - (self.end_kf.time - now()) / (self.end_kf.time - self.start_kf.time)
         if percent_complete > 1:
-            self.request("Stand")
+            self.stand()
             return
         current_pos = self.start_kf.value + travel_vector * percent_complete
         self.prime.setX(current_pos.x)
         self.prime.setY(current_pos.y)
-        # self.prime.setFluidPos(current_pos)
 
     def set_destination(self, point):
         ds = self.prime.get_pos() - point
         arrival_seconds = ds.length() / self.speed
         self.start_kf = Keyframe(self.prime.get_pos())
         self.end_kf = Keyframe(point, now() + arrival_seconds)
-        self.request('Run')
+        self.run()
 
-    def enterRun(self):
+    def run(self):
         # TODO: Make Sinbad do half-body animations
         # actor.makeSubpart("legs", ["Left Thigh", "Right Thigh"])
         # actor.makeSubpart("torso", ["Head"], ["Left Thigh", "Right Thigh"])
@@ -182,12 +176,8 @@ class Avatar(FSM.FSM):
         # actor.loop("reload", partName="torso")
         self.myActor.loop('runBottom')
 
-    def exitRun(self):
-        self.myActor.stop("runBottom")
-
-    def enterStand(self):
-        if "idle" not in self.myActor.getAnimNames():
-            self.myActor.loop("idle")
+    def stand(self):
+        self.myActor.loop("idle")
 
 
 class Environment:
