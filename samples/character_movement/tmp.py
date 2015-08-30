@@ -37,7 +37,6 @@ PICKER_RAY = CollisionRay()
 PICKER_NODE.addSolid(PICKER_RAY)
 PICKER_COLLISION_TRAVERSER.add_collider(PICKER_NODEPATH, PICKER_COLLISION_HANDLER)
 
-
 # Floor collider
 FLOOR_COLLISION_TRAVERSER = CollisionTraverser()
 FLOOR_COLLISION_HANDLER = CollisionHandlerQueue()
@@ -51,67 +50,6 @@ FLOOR_COLLISION_TRAVERSER.add_collider(FLOOR_NODEPATH, FLOOR_COLLISION_HANDLER)
 
 def clamp(v, minimum, maximum):
     return max(minimum, min(v, maximum))
-
-
-# TODO: Remove this
-class Controls(DirectObject):
-    def __init__(self, keybindings=None, translation=None, activate=True):
-        super().__init__()
-        if not translation:
-            translation = {}
-        if not keybindings:
-            keybindings = {}
-        self.controls = {}
-        self.state_bindings(keybindings, False)
-        self.eventBindings(translation, False)
-        if activate:  # bind controls by default
-            self.bindControls()
-
-    def state_bindings(self, keybindings, activate=True):
-        self.keybindings = keybindings.copy()
-        self.controls = {}  # blank the self.controls in preparation for re-bind
-        for k in self.keybindings.keys():
-            self.controls[k] = False
-        if activate:  # re-bind the controls by default
-            self.bindControls()
-
-    def eventBindings(self, translation, activate=True):
-        self.translation = translation.copy()
-        if activate:  # re-bind the controls by default
-            self.bindControls()
-
-    def _translator(self, control, *params):
-        if params:
-            messenger.send(control, list(params))
-        else:
-            messenger.send(control)
-
-    def bindControls(self):
-        """Map the controls to the keys that activate them."""
-        self.ignoreAll()
-        for k, events in self.translation.items():
-            for v in events:
-                self.accept(v, self._translator, [k, ])
-        for control, keys in self.keybindings.items():
-            for key in keys:
-                self.acceptOnce(key, self._keyOn, [control, ])  # don't repeat
-                self.accept(key + '-up', self._keyOff, [control, key])
-
-    def _keyOn(self, control):
-        self.controls[control] = True  # set control to active
-
-    def _keyOff(self, control, event):
-        self.controls[control] = False  # set control to off
-        self.acceptOnce(event, self._keyOn, [control, ])  # listen once again
-
-
-con = Controls(
-    translation={
-        'zoom in': ['wheel_up', 'arrow_up'],
-        'zoom out': ['wheel_down', 'arrow_down'],
-        'click': ['mouse1', 'mouse3'],
-    }
-)
 
 
 class Keyframe:
@@ -212,8 +150,8 @@ class EdgeScreenTracker(DirectObject):
         camera.reparentTo(self.target)
         camera.setPos(0, -self.zoomLvl, 0)
         self.rotateCam(Point2(0, 0))
-        self.accept('zoom in', self.cameraZoom, [0.7])
-        self.accept('zoom out', self.cameraZoom, [1.3])
+        self.accept('wheel_up', self.cameraZoom, [0.7])
+        self.accept('wheel_down', self.cameraZoom, [1.3])
         taskMgr.add(self.mousecam_task, "mousecam_task")
 
     def mousecam_task(self, task):
@@ -262,17 +200,14 @@ class World(DirectObject):
         self.environ = self.blorp.prime
         self.marker = Marker().prime
         EdgeScreenTracker(self.avatar.prime, Point3(0, 0, 1))
-        self.pickerRay = CollisionRay()
-        PICKER_NODE.addSolid(self.pickerRay)
-        self.accept('click', self.on_click)  # translated
+        self.accept('mouse1', self.on_click)
         PICKER_COLLISION_TRAVERSER.showCollisions(render)
-        self.last = 0  # for calculating dt in gameLoop
         taskMgr.add(self.game_loop, "game_loop")  # start the gameLoop task
 
     def on_click(self):
         """Handle the click event."""
-        mpos = base.mouseWatcherNode.getMouse()  # mouse's screen coordinates
-        self.pickerRay.setFromLens(base.camNode, mpos.getX(), mpos.getY())
+        mouse = base.mouseWatcherNode.getMouse()
+        PICKER_RAY.setFromLens(base.camNode, mouse.getX(), mouse.getY())
 
         PICKER_COLLISION_TRAVERSER.traverse(render)
         for i in range(PICKER_COLLISION_HANDLER.getNumEntries()):
@@ -288,8 +223,7 @@ class World(DirectObject):
                 break
 
     def game_loop(self, task):
-        dt = task.time - self.last
-        self.last = task.time
+        dt = globalClock.getDt()
         self.avatar.update(dt)
 
         # Update avatar z pos
@@ -302,7 +236,6 @@ class World(DirectObject):
             point = FLOOR_COLLISION_HANDLER.getEntry(i).getSurfacePoint(render)
             picker = FLOOR_COLLISION_HANDLER.getEntry(i).getFromNodePath()
             if pickedObj.getName() == 'Plane':
-                self.marker.setPos(point)
                 self.avatar.prime.setZ(point.z)
                 break
 
