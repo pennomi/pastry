@@ -1,8 +1,8 @@
 # TODO: Roadmap:
-# * Get Sinbad walking on the ground
+# * Clean up animation switching
 # * Movement via targets and timestamps
 # * Multiplayer via Pastry
-
+# * Enhancement: Queueing of path keyframes
 
 import builtins
 from panda3d.core import CollisionRay, CollisionTraverser, GeomNode, BitMask32,\
@@ -65,28 +65,34 @@ class Keyframe:
 
 class Avatar:
     def __init__(self, initial_position=Point3.zero(), speed=3):
+        # TODO: Should be a list of keyframes
         self.start_kf = Keyframe(initial_position, time=now())
         self.end_kf = Keyframe(initial_position, time=now())
 
-        self.speed = speed  # moving speed
-        self.vel = Vec3.zero()  # velocity
+        # Stats
+        self.speed = speed
 
-        # Avatar scene graph setup
-        self.prime = NodePath('avatar prime')
-        self.prime.reparentTo(render)  # Make Avatar visible.
-        self.prime.setZ(5)  # Be sure to start above the floor.
-        self.prime.setCollideMask(BitMask32.allOff())  # no collisions!
+        # Avatar setup
+        self.nodepath = NodePath('avatar prime')
+        self.nodepath.reparentTo(render)
+        self.nodepath.setCollideMask(BitMask32.allOff())  # no collisions!
 
         # Prepare animation state
-        self.myActor = Actor.Actor('models/Sinbad', {
+        self.model = Actor.Actor('models/Sinbad', {
             "runTop": "models/Sinbad-RunTop",
             "runBottom": "models/Sinbad-RunBase",
             "dance": "models/Sinbad-Dance.001",
             "idle": "models/Sinbad-IdleTop",
         })
-        self.myActor.setHprScale(*(180, 0, 0, .2, .2, .2))
-        self.myActor.reparentTo(self.prime)
+        self.model.setHprScale(*(180, 0, 0, .2, .2, .2))
+        self.model.reparentTo(self.nodepath)
         self.stand()
+
+        # show where the avatar is headed TODO: Use an arrow or something?
+        self.marker = loader.loadModel('models/Sinbad')
+        self.marker.reparentTo(render)
+        self.marker.setScale(.05, .05, .05)
+        self.marker.setCollideMask(BitMask32.allOff())
 
     def update(self, dt):
         # Calculate the position I should be based off of speed and time
@@ -96,14 +102,19 @@ class Avatar:
             self.stand()
             return
         current_pos = self.start_kf.value + travel_vector * percent_complete
-        self.prime.setX(current_pos.x)
-        self.prime.setY(current_pos.y)
+        self.nodepath.setX(current_pos.x)
+        self.nodepath.setY(current_pos.y)
 
     def set_destination(self, point):
-        ds = self.prime.get_pos() - point
+        # Calculate the keyframes
+        ds = point - self.nodepath.get_pos()
         arrival_seconds = ds.length() / self.speed
-        self.start_kf = Keyframe(self.prime.get_pos())
+        self.start_kf = Keyframe(self.nodepath.get_pos())
         self.end_kf = Keyframe(point, now() + arrival_seconds)
+
+        # Now visually make the character move
+        self.nodepath.lookAt(point)
+        self.nodepath.setP(0)
         self.run()
 
     def run(self):
@@ -112,10 +123,10 @@ class Avatar:
         # actor.makeSubpart("torso", ["Head"], ["Left Thigh", "Right Thigh"])
         # actor.loop("walk", partName="legs")
         # actor.loop("reload", partName="torso")
-        self.myActor.loop('runBottom')
+        self.model.loop('runBottom')
 
     def stand(self):
-        self.myActor.loop("idle")
+        self.model.loop("idle")
 
 
 class Environment:
@@ -124,15 +135,7 @@ class Environment:
         self.prime.reparentTo(render)
 
 
-class Marker:
-    def __init__(self):
-        # you probably want to use a different marker model
-        self.prime = loader.loadModel('models/Sinbad')
-        self.prime.reparentTo(render)
-        self.prime.setScale(.05, .05, .05)
-        self.prime.setCollideMask(BitMask32.allOff())
-
-
+# TODO: add a right-click-drag rotation as well
 class EdgeScreenTracker(DirectObject):
     """Mouse camera control interface."""
 
@@ -198,8 +201,7 @@ class World(DirectObject):
         self.avatar = Avatar()
         self.blorp = Environment()
         self.environ = self.blorp.prime
-        self.marker = Marker().prime
-        EdgeScreenTracker(self.avatar.prime, Point3(0, 0, 1))
+        EdgeScreenTracker(self.avatar.nodepath, Point3(0, 0, 1))
         self.accept('mouse1', self.on_click)
         PICKER_COLLISION_TRAVERSER.showCollisions(render)
         taskMgr.add(self.game_loop, "game_loop")  # start the gameLoop task
@@ -218,7 +220,7 @@ class World(DirectObject):
             # We could just ignore this check to get any clicked object
             if pickedObj.getName() == 'Plane':
                 point = PICKER_COLLISION_HANDLER.getEntry(i).getSurfacePoint(render)
-                self.marker.setPos(point)
+                self.avatar.marker.setPos(point)
                 self.avatar.set_destination(point)
                 break
 
@@ -227,7 +229,7 @@ class World(DirectObject):
         self.avatar.update(dt)
 
         # Update avatar z pos
-        FLOOR_RAY.setOrigin(self.avatar.prime.getX(), self.avatar.prime.getY(), 6)
+        FLOOR_RAY.setOrigin(self.avatar.nodepath.getX(), self.avatar.nodepath.getY(), 6)
         FLOOR_RAY.setDirection(0, 0, -1)
         FLOOR_COLLISION_TRAVERSER.traverse(render)
         for i in range(FLOOR_COLLISION_HANDLER.getNumEntries()):
@@ -236,7 +238,7 @@ class World(DirectObject):
             point = FLOOR_COLLISION_HANDLER.getEntry(i).getSurfacePoint(render)
             picker = FLOOR_COLLISION_HANDLER.getEntry(i).getFromNodePath()
             if pickedObj.getName() == 'Plane':
-                self.avatar.prime.setZ(point.z)
+                self.avatar.nodepath.setZ(point.z)
                 break
 
         return direct.task.Task.cont
