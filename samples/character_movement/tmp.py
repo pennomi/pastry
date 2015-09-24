@@ -1,6 +1,4 @@
 # TODO: Roadmap:
-# * Clean up animation switching
-# * Movement via targets and timestamps
 # * Multiplayer via Pastry
 # * Enhancement: Queueing of path keyframes
 
@@ -27,28 +25,60 @@ messenger = builtins.messenger
 globalClock = builtins.globalClock
 
 
-# Mouse collider
-PICKER_COLLISION_TRAVERSER = CollisionTraverser()
-PICKER_COLLISION_HANDLER = CollisionHandlerQueue()
-PICKER_NODE = CollisionNode('mouse_ray')
-PICKER_NODEPATH = camera.attachNewNode(PICKER_NODE)
-PICKER_NODE.setFromCollideMask(GeomNode.getDefaultCollideMask())
-PICKER_RAY = CollisionRay()
-PICKER_NODE.addSolid(PICKER_RAY)
-PICKER_COLLISION_TRAVERSER.add_collider(PICKER_NODEPATH, PICKER_COLLISION_HANDLER)
+class Picker:
+    def __init__(self, debug=False):
+        # Init components
+        self.traverser = CollisionTraverser()
+        self.handler = CollisionHandlerQueue()
+        self.node = CollisionNode('picker_ray')  # TODO: Name differently?
+        self.nodepath = camera.attachNewNode(self.node)
+        self.ray = CollisionRay()
 
-# Floor collider
-FLOOR_COLLISION_TRAVERSER = CollisionTraverser()
-FLOOR_COLLISION_HANDLER = CollisionHandlerQueue()
-FLOOR_NODE = CollisionNode('floor_ray')
-FLOOR_NODEPATH = render.attachNewNode(FLOOR_NODE)
-FLOOR_NODE.setFromCollideMask(GeomNode.getDefaultCollideMask())
-FLOOR_RAY = CollisionRay()
-FLOOR_NODE.addSolid(FLOOR_RAY)
-FLOOR_COLLISION_TRAVERSER.add_collider(FLOOR_NODEPATH, FLOOR_COLLISION_HANDLER)
+        # Set up relationships
+        self.node.setFromCollideMask(GeomNode.getDefaultCollideMask())
+        self.node.addSolid(self.ray)
+        self.traverser.addCollider(self.nodepath, self.handler)
+
+        # Show collisions?
+        if debug:
+            self.traverser.showCollisions(render)
+
+    def _iterate(self, condition):
+        # TODO: Move condition to the constructor
+        # Iterate over the collisions and pick one
+        self.traverser.traverse(render)
+
+        # Go closest to farthest
+        self.handler.sortEntries()
+
+        for i in range(self.handler.getNumEntries()):
+            pickedObj = self.handler.getEntry(i).getIntoNodePath()
+            picker = self.handler.getEntry(i).getFromNodePath()
+            # For now all we care about is clicking on the ground
+            # We could just ignore this check to get any clicked object
+            # TODO: Make this a lambda check
+            if not condition or (condition and condition(pickedObj)):
+                point = self.handler.getEntry(i).getSurfacePoint(render)
+                return point
+
+        # Too bad, didn't find any matches
+        return None
+
+    def from_camera(self, condition=None):
+        # Get the mouse and generate a ray form the camera to its 2D position
+        mouse = base.mouseWatcherNode.getMouse()
+        self.ray.setFromLens(base.camNode, mouse.getX(), mouse.getY())
+        return self._iterate(condition)
+
+    def from_ray(self, origin, direction, condition=None):
+        # Set the ray from a specified point and direction
+        self.ray.setOrigin(origin)
+        self.ray.setDirection(direction)
+        return self._iterate(condition)
 
 
-def clamp(v, minimum, maximum):
+def clamp(v, minmax):
+    minimum, maximum = minmax
     return max(minimum, min(v, maximum))
 
 
@@ -64,13 +94,12 @@ class Keyframe:
 
 
 class Avatar:
-    def __init__(self, initial_position=Point3.zero(), speed=3):
+    speed = 3
+
+    def __init__(self, initial_position=Point3.zero()):
         # TODO: Should be a list of keyframes
         self.start_kf = Keyframe(initial_position, time=now())
         self.end_kf = Keyframe(initial_position, time=now())
-
-        # Stats
-        self.speed = speed
 
         # Avatar setup
         self.nodepath = NodePath('avatar prime')
@@ -99,6 +128,7 @@ class Avatar:
         travel_vector = (self.end_kf.value - self.start_kf.value)
         percent_complete = 1 - (self.end_kf.time - now()) / (self.end_kf.time - self.start_kf.time)
         if percent_complete > 1:
+            # We must be done. Stop animating.
             self.stand()
             return
         current_pos = self.start_kf.value + travel_vector * percent_complete
@@ -123,75 +153,78 @@ class Avatar:
         # actor.makeSubpart("torso", ["Head"], ["Left Thigh", "Right Thigh"])
         # actor.loop("walk", partName="legs")
         # actor.loop("reload", partName="torso")
-        self.model.loop('runBottom')
+        if not self.model.getCurrentAnim() == 'runBottom':
+            self.model.loop('runBottom')
 
     def stand(self):
-        self.model.loop("idle")
-
-
-class Environment:
-    def __init__(self):
-        self.prime = loader.loadModel("models/level1")
-        self.prime.reparentTo(render)
+        if not self.model.getCurrentAnim() == 'idle':
+            self.model.loop("idle")
 
 
 # TODO: add a right-click-drag rotation as well
 class EdgeScreenTracker(DirectObject):
     """Mouse camera control interface."""
 
-    def __init__(self, avatar, offset=Point3.zero(), dist=10, rot=20,
-                 zoom=(2, 20), pitch=(-80, -10)):
+    def __init__(self, avatar, offset=Point3.zero(), initial_zoom=10,
+                 zoom_limits=(2, 20), pitch_limits=(-80, -10)):
         super().__init__()
         base.disableMouse()
-        self.zoomLvl = dist
-        self.speed = 1.0 / rot
-        self.zoomClamp = zoom
-        self.clampP = pitch
+        self.zoom = initial_zoom
+        self.speed = 1.0 / 20.0
+        self.zoom_limits = zoom_limits
+        self.pitch_limits = pitch_limits
+
+        # Move the camera with the target
         self.target = avatar.attachNewNode('camera target')
         self.target.setPos(offset)
+
+        # Though the camera parents to the avatar, lock its rotation to render
         self.target.node().setEffect(CompassEffect.make(render))
         camera.reparentTo(self.target)
-        camera.setPos(0, -self.zoomLvl, 0)
-        self.rotateCam(Point2(0, 0))
-        self.accept('wheel_up', self.cameraZoom, [0.7])
-        self.accept('wheel_down', self.cameraZoom, [1.3])
+        camera.setPos(0, -self.zoom, 0)
+        self.rotate_camera(Point2(0, 0))
+        self.accept('wheel_up', self.adjust_zoom, [0.7])
+        self.accept('wheel_down', self.adjust_zoom, [1.3])
+        # TODO: Polish up this keyboard movement
+        self.accept('arrow_right-repeat', self.rotate_camera, [Point2(10, 0)])
+        self.accept('arrow_left-repeat', self.rotate_camera, [Point2(-10, 0)])
         taskMgr.add(self.mousecam_task, "mousecam_task")
 
     def mousecam_task(self, task):
-        self.setDist()
+        # Lock the camera on the target
+        self.position_camera()
         camera.lookAt(self.target)
-        if not base.mouseWatcherNode.hasMouse():
-            return Task.cont
 
         # Handle border-panning
+        if not base.mouseWatcherNode.hasMouse():
+            return Task.cont
         mpos = base.mouseWatcherNode.getMouse()
         if mpos.getX() > 0.99:
-            self.rotateCam(Point2(-10, 0))
+            self.rotate_camera(Point2(-10, 0))
         elif mpos.getX() < -0.99:
-            self.rotateCam(Point2(10, 0))
+            self.rotate_camera(Point2(10, 0))
         if mpos.getY() > 0.9:
-            self.rotateCam(Point2(0, -3))
+            self.rotate_camera(Point2(0, -3))
         elif mpos.getY() < -0.9:
-            self.rotateCam(Point2(0, 3))
+            self.rotate_camera(Point2(0, 3))
         return Task.cont  # loop again.
 
-    def rotateCam(self, arc):
-        newP = clamp(self.target.getP() - arc.getY(), *self.clampP)  # Clamped.
+    def rotate_camera(self, arc):
+        newP = clamp(self.target.getP() - arc.getY(), self.pitch_limits)
         newH = self.target.getH() + arc.getX()  # Not clamped, just added.
         LERP.LerpHprInterval(
             self.target, self.speed, Vec3(newH, newP, self.target.getR())
         ).start()
 
-    def cameraZoom(self, zoomFactor, ):
+    def adjust_zoom(self, zoomFactor):
         """Scale and clamp zoom level, then set distance by it."""
-        self.zoomLvl = clamp(self.zoomLvl * zoomFactor, *self.zoomClamp)
-        self.setDist()
+        self.zoom = clamp(self.zoom * zoomFactor, self.zoom_limits)
 
-    def setDist(self):
+    def position_camera(self):
         """Maintain a constant distance to the target."""
         vec = camera.getPos()
         vec.normalize()
-        vec *= self.zoomLvl
+        vec *= self.zoom
         camera.setFluidPos(vec)
 
 
@@ -199,47 +232,40 @@ class World(DirectObject):
     def __init__(self):
         super().__init__()
         self.avatar = Avatar()
-        self.blorp = Environment()
-        self.environ = self.blorp.prime
+
+        # The map
+        self.terrain = loader.loadModel("models/level1")
+        self.terrain.reparentTo(render)
+
         EdgeScreenTracker(self.avatar.nodepath, Point3(0, 0, 1))
         self.accept('mouse1', self.on_click)
-        PICKER_COLLISION_TRAVERSER.showCollisions(render)
         taskMgr.add(self.game_loop, "game_loop")  # start the gameLoop task
+
+        self.mouse_picker = Picker()
+        self.floor_picker = Picker()
 
     def on_click(self):
         """Handle the click event."""
-        mouse = base.mouseWatcherNode.getMouse()
-        PICKER_RAY.setFromLens(base.camNode, mouse.getX(), mouse.getY())
-
-        PICKER_COLLISION_TRAVERSER.traverse(render)
-        for i in range(PICKER_COLLISION_HANDLER.getNumEntries()):
-            PICKER_COLLISION_HANDLER.sortEntries()  # get the closest object
-            pickedObj = PICKER_COLLISION_HANDLER.getEntry(i).getIntoNodePath()
-            picker = PICKER_COLLISION_HANDLER.getEntry(i).getFromNodePath()
-            # For now all we care about is clicking on the ground
-            # We could just ignore this check to get any clicked object
-            if pickedObj.getName() == 'Plane':
-                point = PICKER_COLLISION_HANDLER.getEntry(i).getSurfacePoint(render)
-                self.avatar.marker.setPos(point)
-                self.avatar.set_destination(point)
-                break
+        point = self.mouse_picker.from_camera(
+            # Only include the ground
+            condition=lambda o: o.getName() == 'Plane')
+        if not point:
+            return
+        self.avatar.marker.setPos(point)
+        self.avatar.set_destination(point)
 
     def game_loop(self, task):
         dt = globalClock.getDt()
         self.avatar.update(dt)
 
         # Update avatar z pos
-        FLOOR_RAY.setOrigin(self.avatar.nodepath.getX(), self.avatar.nodepath.getY(), 6)
-        FLOOR_RAY.setDirection(0, 0, -1)
-        FLOOR_COLLISION_TRAVERSER.traverse(render)
-        for i in range(FLOOR_COLLISION_HANDLER.getNumEntries()):
-            FLOOR_COLLISION_HANDLER.sortEntries()  # get the closest object
-            pickedObj = FLOOR_COLLISION_HANDLER.getEntry(i).getIntoNodePath()
-            point = FLOOR_COLLISION_HANDLER.getEntry(i).getSurfacePoint(render)
-            picker = FLOOR_COLLISION_HANDLER.getEntry(i).getFromNodePath()
-            if pickedObj.getName() == 'Plane':
-                self.avatar.nodepath.setZ(point.z)
-                break
+        origin = Point3(
+            self.avatar.nodepath.getX(), self.avatar.nodepath.getY(), 10)
+        direction = Vec3(0, 0, -1)
+        point = self.floor_picker.from_ray(
+            origin, direction, condition=lambda o: o.getName() == 'Plane')
+        if point:
+            self.avatar.nodepath.setZ(point.z)
 
         return direct.task.Task.cont
 
