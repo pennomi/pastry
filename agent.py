@@ -64,8 +64,7 @@ class PastryAgent(InternalMessagingServer):
         self._loop.run_until_complete(self.server.wait_closed())
         self._loop.close()
 
-    @asyncio.coroutine
-    def _create_client_connection(self, reader, writer):
+    async def _create_client_connection(self, reader, writer):
         """A unique instance of this coroutine is active for each connected
         client.
         """
@@ -82,7 +81,7 @@ class PastryAgent(InternalMessagingServer):
 
         while not self.finished:
             try:
-                msg = yield from reader.read(MAX_PACKET_SIZE)
+                msg = await reader.read(MAX_PACKET_SIZE)
                 if not msg:  # They've disconnected
                     break
             except (asyncio.CancelledError, asyncio.TimeoutError):
@@ -92,14 +91,13 @@ class PastryAgent(InternalMessagingServer):
                 self.log("Something happened!", exc)
                 break
             # Handle the message
-            yield from self._read_message(connection, msg)
+            await self._read_message(connection, msg)
 
         self.log("Close the socket for {}".format(connection))
         writer.close()
         self.connections.remove(connection)
 
-    @asyncio.coroutine
-    def _read_message(self, sender: ClientConnection, data: bytes):
+    async def _read_message(self, sender: ClientConnection, data: bytes):
         for d in [_ for _ in data.split(b'\n') if _]:
             # Decode the message
             raw_message = d.decode('utf8')
@@ -129,10 +127,9 @@ class PastryAgent(InternalMessagingServer):
                 self.internal_broadcast(channel, sender.id)
             else:
                 # This is a non-pubsub message; forward to the do handler
-                yield from self._handle_client_message(sender, channel, message)
+                await self._handle_client_message(sender, channel, message)
 
-    @asyncio.coroutine
-    def _handle_client_message(self, sender: ClientConnection,
+    async def _handle_client_message(self, sender: ClientConnection,
                                channel: Channel, message: str):
         # TODO: This should receive channels too?
         # Subscription requests are already handled; must be a
@@ -151,10 +148,9 @@ class PastryAgent(InternalMessagingServer):
         """Whenever the agent receives an internal message, it's forwarded
         to all relevant clients.
         """
-        asyncio.async(self.client_broadcast(channel, message), loop=self._loop)
+        asyncio.ensure_future(self.client_broadcast(channel, message), loop=self._loop)
 
-    @asyncio.coroutine
-    def client_broadcast(self, channel: Channel, data: str):
+    async def client_broadcast(self, channel: Channel, data: str):
         connections = [c for c in self.connections if c.responds_to(channel)]
         # TODO: Handle channels better on the client itself
         self.log("Sending: {} to {} connections".format(
@@ -166,7 +162,7 @@ class PastryAgent(InternalMessagingServer):
         for c in connections:
             try:
                 c.writer.write(to_send.encode() + b'\n')
-                yield from c.writer.drain()
+                await c.writer.drain()
             except ConnectionResetError:
                 self.log("Lost connection to {}. Killing...".format(c))
                 self.connections.remove(c)

@@ -83,14 +83,13 @@ class ChessClient(PastryClient):
 
     def setup(self):
         self.subscribe("chess-room-01")
-        asyncio.async(self.run_panda())
+        asyncio.ensure_future(self.run_panda())
         self.game = ChessboardDemo(self)
 
-    @asyncio.coroutine
-    def run_panda(self):
+    async def run_panda(self):
         taskMgr.step()
-        yield from asyncio.sleep(1 / 60)  # 60 FPS
-        asyncio.async(self.run_panda())
+        await asyncio.sleep(1 / 60)  # 60 FPS
+        asyncio.ensure_future(self.run_panda())
 
     def object_created(self, obj):
         if obj.color == "white":

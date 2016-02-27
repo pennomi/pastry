@@ -25,14 +25,13 @@ class ChessClient(PastryClient):
 
     def setup(self):
         self.subscribe("chess-room-01")
-        asyncio.async(self.run_panda())
+        asyncio.ensure_future(self.run_panda())
         self.game = ChessboardDemo(self)
 
-    @asyncio.coroutine
-    def run_panda(self):
-        taskMgr.step()
-        yield from asyncio.sleep(1 / 60)  # 60 FPS
-        asyncio.async(self.run_panda())
+    async def run_panda(self):
+        while True:
+            taskMgr.step()
+            await asyncio.sleep(1 / 60)  # 60 FPS
 
     def object_created(self, obj):
         if obj.color == "white":
@@ -105,6 +104,6 @@ if __name__ == "__main__":
         to_start = MultiServer(ChessAgent, ChessZone)
     elif thing == 'client':
         to_start = ChessClient()
-    elif thing == 'zone':
-        to_start = ChessZone()
+    else:
+        raise KeyError('argument must be (server|client)')
     to_start.run()

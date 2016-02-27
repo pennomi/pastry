@@ -34,14 +34,13 @@ class ChatClient(PastryClient):
     def setup(self):
         # Join a zone or two
         self.subscribe("chat")
-        asyncio.async(self.heartbeat(), loop=self._loop)
+        asyncio.ensure_future(self.heartbeat(), loop=self._loop)
 
-    @asyncio.coroutine
-    def heartbeat(self):
+    async def heartbeat(self):
         while not self.finished:
             m = Message(owner=self.account_id, text="Heartbeat", zone="chat")
             self.save(m)
-            yield from asyncio.sleep(3.0)
+            await asyncio.sleep(3.0)
 
     def object_created(self, distributed_object):
         print(distributed_object.owner, distributed_object.text)

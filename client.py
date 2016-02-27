@@ -80,34 +80,30 @@ class PastryClient:
     # TODO: Audit all functions for private vs public
     # TODO: Make sure that the client can run the GUI even when not connected
     # to the server
-    @asyncio.coroutine
-    def establish_connection(self):
+    async def establish_connection(self):
         # Establish the socket
-        self._reader, self._writer = yield from asyncio.open_connection(
+        self._reader, self._writer = await asyncio.open_connection(
             '127.0.0.1', 8888, loop=self._loop)
-
         # TODO: Authentication
-
         # Schedule any worker tasks
-        asyncio.async(self.receive(), loop=self._loop)
+        asyncio.ensure_future(self.receive(), loop=self._loop)
         self.setup()
 
-    @asyncio.coroutine
-    def receive(self):
+    async def receive(self):
         msg = None
         leftovers = b''
         while not self.finished:
             try:
-                msg = yield from self._reader.read(MAX_PACKET_SIZE)
+                msg = await self._reader.read(MAX_PACKET_SIZE)
                 if not msg:
                     # The server disconnected
-                    yield from self.close()
+                    await self.close()
             except (asyncio.CancelledError, asyncio.TimeoutError):
                 print("Cancelled or Timeout")
                 raise
             except Exception as exc:
                 print("Something happened!", exc)
-                yield from self.close()
+                await self.close()
             msg = leftovers + msg
             leftovers = b''
             messages = msg.split(b"\n")
@@ -127,8 +123,7 @@ class PastryClient:
         channel_data = str(channel).encode()
         self._writer.write(channel_data + b"|" + data.encode() + b"\n")
 
-    @asyncio.coroutine
-    def close(self):
+    async def close(self):
         print("Closing")
         self.finished = True
         self._loop.stop()
