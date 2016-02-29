@@ -26,12 +26,15 @@ globalClock = builtins.globalClock
 
 
 class Picker:
-    def __init__(self, debug=False):
+    def __init__(self, debug=False, type: str="camera"):
         # Init components
         self.traverser = CollisionTraverser()
         self.handler = CollisionHandlerQueue()
         self.node = CollisionNode('picker_ray')  # TODO: Name differently?
-        self.nodepath = camera.attachNewNode(self.node)
+        if type == "camera":
+            self.nodepath = camera.attachNewNode(self.node)
+        else:
+            self.nodepath = render.attachNewNode(self.node)
         self.ray = CollisionRay()
 
         # Set up relationships
@@ -53,10 +56,8 @@ class Picker:
 
         for i in range(self.handler.getNumEntries()):
             pickedObj = self.handler.getEntry(i).getIntoNodePath()
-            picker = self.handler.getEntry(i).getFromNodePath()
-            # For now all we care about is clicking on the ground
-            # We could just ignore this check to get any clicked object
-            # TODO: Make this a lambda check
+            # picker = self.handler.getEntry(i).getFromNodePath()
+
             if not condition or (condition and condition(pickedObj)):
                 point = self.handler.getEntry(i).getSurfacePoint(render)
                 return point
@@ -113,7 +114,7 @@ class Avatar:
             "dance": "models/Sinbad-Dance.001",
             "idle": "models/Sinbad-IdleTop",
         })
-        self.model.setHprScale(*(180, 0, 0, .2, .2, .2))
+        self.model.setHprScale(180, 0, 0, .2, .2, .2)
         self.model.reparentTo(self.nodepath)
         self.stand()
 
@@ -216,9 +217,9 @@ class EdgeScreenTracker(DirectObject):
             self.target, self.speed, Vec3(newH, newP, self.target.getR())
         ).start()
 
-    def adjust_zoom(self, zoomFactor):
+    def adjust_zoom(self, zoom_factor):
         """Scale and clamp zoom level, then set distance by it."""
-        self.zoom = clamp(self.zoom * zoomFactor, self.zoom_limits)
+        self.zoom = clamp(self.zoom * zoom_factor, self.zoom_limits)
 
     def position_camera(self):
         """Maintain a constant distance to the target."""
@@ -242,7 +243,8 @@ class World(DirectObject):
         taskMgr.add(self.game_loop, "game_loop")  # start the gameLoop task
 
         self.mouse_picker = Picker()
-        self.floor_picker = Picker()
+        # TODO: Remove type and make it into a subclass?
+        self.floor_picker = Picker(type="floor")
 
     def on_click(self):
         """Handle the click event."""
@@ -260,12 +262,14 @@ class World(DirectObject):
 
         # Update avatar z pos
         origin = Point3(
-            self.avatar.nodepath.getX(), self.avatar.nodepath.getY(), 10)
+            self.avatar.nodepath.getX(), self.avatar.nodepath.getY(), 5)
+
         direction = Vec3(0, 0, -1)
         point = self.floor_picker.from_ray(
             origin, direction, condition=lambda o: o.getName() == 'Plane')
         if point:
-            self.avatar.nodepath.setZ(point.z)
+            assert point.getX() == self.avatar.nodepath.getX()
+            self.avatar.nodepath.setPos(point)
 
         return direct.task.Task.cont
 
