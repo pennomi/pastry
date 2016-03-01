@@ -20,6 +20,7 @@ CHESS_REGISTRY = DistributedObjectClassRegistry(
 class ChessClient(PastryClient):
     registry = CHESS_REGISTRY
     account_id = str(uuid4())
+    game = None
 
     models = {}
 

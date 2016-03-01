@@ -4,6 +4,7 @@ All internal message types:
 NAME:           CHANNEL:                        PAYLOAD:
 User Join       {ZONE_ID}.join                  {USER_ID}
 User Leave?     {ZONE_ID}.leave                 {USER_ID}
+User Kicked     {ZONE_ID}.kick                  {USER_ID}
 Public create   {ZONE_ID}.create.{DO_CLASS}     {SERIALIZED_DO}
 Public update   {ZONE_ID}.update                {SERIALIZED_DO}
 Public delete   {ZONE_ID}.delete                {SERIALIZED_DO}
@@ -17,8 +18,9 @@ ZONE_ID in the channel serves entirely as an internal message pruning system.
 # TODO: Should we mark the whispers specially, since they are unique?
 # TODO: Method should be an Enum
 # TODO: There are subscribe/unsubscribe on the client. Change to join/leave?
-# TODO: Add a kill internal message that kills the USER_ID in question. Ouch.
+# TODO: Add a kick internal message that kicks the USER_ID in question. Ouch.
 # TODO: Add an authenticate message for the client
+
 
 class Channel:
     """A classy representation of channels. This makes it easier

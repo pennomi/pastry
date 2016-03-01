@@ -2,9 +2,6 @@ import json
 from uuid import uuid4
 
 
-# TODO: A Keyframe field type that will let us combo a timestamp/value
-
-
 class Field:
     def __init__(self, property_type):
         self.t = property_type
@@ -12,6 +9,7 @@ class Field:
 
 class DistributedObjectMetaclass(type):
     def __new__(mcs, classname, baseclasses, attrs):
+        # TODO: Why not put saved data in __dict__?
         attrs['_saved_field_data'] = {}  # This is where synced data go
         attrs['_dirty_field_data'] = {}  # This is where local changes go
         for name, thing in list(attrs.items()):
@@ -21,18 +19,16 @@ class DistributedObjectMetaclass(type):
                 continue
 
             # initialize the data in a type-specific way
-            if thing.t == int:
-                attrs['_dirty_field_data'][name] = 0
-            elif thing.t == float:
-                attrs['_dirty_field_data'][name] = 0.0
-            elif thing.t == str:
-                attrs['_dirty_field_data'][name] = ""
-            elif thing.t == bytes:
-                attrs['_dirty_field_data'][name] = b""
-            elif thing.t == bool:
-                attrs['_dirty_field_data'][name] = False
-            else:
-                attrs['_dirty_field_data'][name] = None
+            attrs['_dirty_field_data'][name] = {
+                int: 0,
+                float: 0.0,
+                str: "",
+                bytes: b"",
+                bool: False,
+                # TODO: UUID?
+                # TODO: Datetime?
+                # TODO: Keyframe (Datetime, Value) field?
+            }.get(thing.t, None)
 
             # Create properties only for the specified fields.
             # We don't want to override global get/set behavior.
@@ -89,15 +85,15 @@ class DistributedObject(metaclass=DistributedObjectMetaclass):
         # This is only new is saved fields are not yet initialized
         return bool(self._saved_field_data)
 
-    def _update(self, data):
+    def _update(self, data: dict) -> None:
         # TODO: Nuke any keys in the dirty data that exist here?
         self._saved_field_data.update(data)
 
-    def _save(self):
+    def _save(self) -> None:
         self._saved_field_data.update(self._dirty_field_data)
         self._dirty_field_data.clear()
 
-    def serialize(self, for_create=False):
+    def serialize(self, for_create=False) -> str:
         if for_create:
             # Just send everything if we're creating this
             return json.dumps(self._saved_field_data)

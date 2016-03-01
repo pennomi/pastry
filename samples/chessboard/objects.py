@@ -3,7 +3,6 @@ from distributed_objects import DistributedObject, Field
 
 class Piece(DistributedObject):
     """An abstract class for pieces"""
-    model_path = Field(str)
     square = Field(int)  # 0-63 represents all positions
     color = Field(str)
 

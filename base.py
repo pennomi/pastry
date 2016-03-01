@@ -6,6 +6,7 @@ from util import Channel
 class InternalMessagingServer:
     log_color = "\033[94m"
     log_name = "Unknown"
+    server = None
 
     def __init__(self, loop=None):
         if not loop:
