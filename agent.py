@@ -110,6 +110,8 @@ class PastryAgent(InternalMessagingServer):
                 # TODO: Hang up on any requests that aren't permitted
                 # TODO: (ie. can't subscribe to any subchannels: no `.`s)
                 # TODO: Also some channels are restricted to internal usage
+                # TODO: Can we reject subscriptions to unknown zones?
+                # TODO: Can ONLY subscribe to zones
                 self.log("Joining", sender, "to", channel.target)
                 sender.subscriptions.append(channel.target)
                 self.internal_subscribe(channel.target)

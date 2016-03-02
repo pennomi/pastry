@@ -6,26 +6,13 @@ from multiserver import MultiServer
 from distributed_objects import DistributedObjectClassRegistry
 from zone import PastryZone
 from samples.chessboard.objects import Pawn, Knight, Bishop, Rook, Queen, King
-import builtins
 import sys
 from direct.showbase.ShowBase import ShowBase
-#from panda3d.core import CollisionTraverser, CollisionNode
-from panda3d.core import CollisionHandlerQueue, CollisionRay
 from panda3d.core import AmbientLight, DirectionalLight
 from panda3d.core import TextNode
-from panda3d.core import LPoint3, LVector3, BitMask32
+from panda3d.core import LVector3
 from direct.gui.OnscreenText import OnscreenText
 from direct.task.Task import Task
-
-# I put these in so my linter doesn't explode.
-try:
-    base = builtins.base
-    render = builtins.render
-    camera = builtins.camera
-    loader = builtins.loader
-    taskMgr = builtins.taskMgr
-except AttributeError:
-    pass
 
 
 class MovementDemo(ShowBase):
@@ -36,23 +23,23 @@ class MovementDemo(ShowBase):
         self.title = OnscreenText(
             text="Pastry Tutorial - Prototype MMO Character Movement",
             style=1, fg=(1, 1, 1, 1), shadow=(0, 0, 0, 1),
-            pos=(0.8, -0.95), scale = .07)
+            pos=(0.8, -0.95), scale=.07)
         self.escape_text = OnscreenText(
-            text="ESC: Quit", parent=base.a2dTopLeft,
+            text="ESC: Quit", parent=self.a2dTopLeft,
             style=1, fg=(1, 1, 1, 1), pos=(0.06, -0.1),
-            align=TextNode.ALeft, scale = .05)
+            align=TextNode.ALeft, scale=.05)
         self.mouse_text = OnscreenText(
             text="Left-click and drag: Pick up and drag piece",
-            parent=base.a2dTopLeft, align=TextNode.ALeft,
+            parent=self.a2dTopLeft, align=TextNode.ALeft,
             style=1, fg=(1, 1, 1, 1), pos=(0.06, -0.16), scale=.05)
 
         self.accept('escape', sys.exit)  # Escape quits
         self.disableMouse()  # Disable mouse camera control
-        camera.setPosHpr(0, -12, 8, 0, -35, 0)  # Set the camera
+        self.camera.setPosHpr(0, -12, 8, 0, -35, 0)  # Set the camera
         self.make_lights()  # Setup default lighting
 
         # Start the task that handles the picking
-        self.mouse_task = taskMgr.add(self.mouse_task, 'mouse_task')
+        self.mouse_task = self.taskMgr.add(self.mouse_task, 'mouse_task')
         self.accept("mouse1", self.grab_piece)
         self.accept("mouse1-up", self.release_piece)
 
@@ -87,9 +74,9 @@ class ChessClient(PastryClient):
         self.game = ChessboardDemo(self)
 
     async def run_panda(self):
-        taskMgr.step()
-        await asyncio.sleep(1 / 60)  # 60 FPS
-        asyncio.ensure_future(self.run_panda())
+        while True:
+            taskMgr.step()
+            await asyncio.sleep(1 / 60)  # 60 FPS
 
     def object_created(self, obj):
         if obj.color == "white":
@@ -142,7 +129,7 @@ class ChessZone(PastryZone):
             [Pawn(square=i, **white) for i in range(8, 16)] +
             [Pawn(square=i, **black) for i in range(48, 56)] +
             [piece_order[i](square=i, **white) for i in range(8)] +
-            [piece_order[i](square=i+56, **black) for i in range(8)]
+            [piece_order[i](square=i + 56, **black) for i in range(8)]
         )
         self.save(*pieces)
 

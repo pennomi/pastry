@@ -1,14 +1,27 @@
-# TODO: Roadmap:
+# ROADMAP
 # * Multiplayer via Pastry
 # * Enhancement: Queueing of path keyframes
-from direct.task.Task import Task
-from panda3d.core import Point3, Vec3, NodePath
+import asyncio
+import sys
+from uuid import uuid4
 
-from direct.actor import Actor
+from direct.gui.OnscreenText import OnscreenText
+from direct.task.Task import Task
+from panda3d.core import Point3, Vec3, TextNode
+
 from direct.showbase.ShowBase import ShowBase
 
 from time import time as now
-from panda_utils import RayPicker, MouseRayPicker, EdgeScreenTracker
+
+from agent import PastryAgent
+from client import PastryClient
+from distributed_objects import DistributedObjectClassRegistry
+from multiserver import MultiServer
+from samples.character_movement.panda_utils import RayPicker, MouseRayPicker, \
+    EdgeScreenTracker
+
+from samples.character_movement.sinbad import Sinbad
+from zone import PastryZone
 
 
 class Keyframe:
@@ -22,49 +35,20 @@ class Keyframe:
         self.time = time
 
 
-class Avatar:
+class Avatar(Sinbad):
     speed = 3
 
     def __init__(self, initial_position=Point3.zero()):
-        # TODO: Should be a list of keyframes
+        # TODO: Make into a list of keyframes to do waypoints
         self.start_kf = Keyframe(initial_position, time=now())
         self.end_kf = Keyframe(initial_position, time=now())
-
-        # Avatar setup
-        self.nodepath = NodePath('avatar')
-        self.nodepath.reparentTo(base.render)
-
-        # Prepare animation state
-        self._model = Actor.Actor('models/Sinbad', {
-            "runTop": "models/Sinbad-RunTop",
-            "runBottom": "models/Sinbad-RunBase",
-            "dance": "models/Sinbad-Dance.001",
-            "idle": "models/Sinbad-IdleTop",
-        })
-        bottom_parts = [
-            "Toe.L", "Toe.R",
-            "Foot.L", "Foot.R",
-            "Calf.L", "Calf.R",
-            "Thigh.L", "Thigh.R",
-            "Waist", "Root",
-        ]
-        # TODO: Finish Upper subparts list
-        top_parts = [
-            "Torso", "Chest", "Neck", "Head",
-            "Clavicle.L", "Clavicle.R",
-            "Ulna.L", "Ulna.R",
-            "Hand.L", "Hand.R",
-        ]
-        self._model.makeSubpart("top", top_parts, excludeJoints=bottom_parts)
-        self._model.makeSubpart("bottom", bottom_parts, excludeJoints=top_parts)
-        self._model.setHprScale(180, 0, 0, .2, .2, .2)
-        self._model.reparentTo(self.nodepath)
-        self.stand()
 
         # show where the avatar is headed TODO: Use an arrow or something?
         self._marker = base.loader.loadModel('models/Sinbad')
         self._marker.reparentTo(base.render)
         self._marker.setScale(.05, .05, .05)
+
+        super().__init__()
 
     def update(self):
         # Calculate the position I should be based off of speed and time
@@ -78,15 +62,13 @@ class Avatar:
             self.stand()
             return
         current_pos = self.start_kf.value + travel_vector * percent_complete
-        self.nodepath.setX(current_pos.x)
-        self.nodepath.setY(current_pos.y)
 
         # Update avatar z pos to snap to floor
-        origin = Point3(
-            self.nodepath.getX(), self.nodepath.getY(), 5)
-        direction = Vec3(0, 0, -1)
-        point = FLOOR_PICKER.from_ray(
-            origin, direction, condition=lambda o: o.getName() == 'Plane')
+        picker = RayPicker()  # TODO: Reuse instead of instantiating
+        point = picker.from_ray(
+            Point3(current_pos.x, current_pos.y, 5),
+            Vec3(0, 0, -1),
+            condition=lambda o: o.getName() == 'Plane')
         self.nodepath.setPos(point)
 
     def set_destination(self, point):
@@ -104,30 +86,42 @@ class Avatar:
         # Show a marker
         self._marker.setPos(point)
 
-    def run(self):
-        if self._model.getCurrentAnim() not in ["runTop", "runBottom"]:
-            self._model.loop("runTop", partName="top")
-            self._model.loop("runBottom", partName="bottom")
-
-    def stand(self):
-        if not self._model.getCurrentAnim() == 'idle':
-            self._model.loop("idle")
-
 
 class World(ShowBase):
     def __init__(self):
         super().__init__()
-        self.avatar = Avatar()
 
-        # The map
+        # Put some directions on screen.
+        self.title = OnscreenText(
+            text="Pastry Tutorial - Character Movement",
+            style=1, fg=(1, 1, 1, 1), shadow=(0, 0, 0, 1),
+            pos=(0.7, -0.95), scale=.07)
+        self.escape_text = OnscreenText(
+            text="ESC: Quit", parent=self.a2dTopLeft,
+            style=1, fg=(1, 1, 1, 1), pos=(0.06, -0.1),
+            align=TextNode.ALeft, scale=.05)
+        self.mouse_text = OnscreenText(
+            text="Left-click and drag: Pick up and drag piece",
+            parent=self.a2dTopLeft, align=TextNode.ALeft,
+            style=1, fg=(1, 1, 1, 1), pos=(0.06, -0.16), scale=.05)
+
+        # Escape quits
+        self.accept('escape', sys.exit)
+
+        # Initialize game objects
+        self.avatar = Avatar()
         self.terrain = self.loader.loadModel("models/level1")
         self.terrain.reparentTo(self.render)
 
-        EdgeScreenTracker(self.avatar.nodepath, Point3(0, 0, 1))
-        self.accept('mouse1', self.on_click)
-        self.taskMgr.add(self.game_loop, "game_loop")  # start the gameLoop task
-
+        # Set up the mouse picker
         self.mouse_picker = MouseRayPicker()
+        self.accept('mouse1', self.on_click)
+
+        # Add the camera controller
+        EdgeScreenTracker(self.avatar.nodepath, Point3(0, 0, 1))
+
+        # start the game loop  TODO asyncio
+        self.taskMgr.add(self.game_loop, "game_loop")
 
     def on_click(self):
         """Handle the click event."""
@@ -145,6 +139,88 @@ class World(ShowBase):
         return Task.cont
 
 
-base = World()
-FLOOR_PICKER = RayPicker()
-base.run()
+# Register all DOs here; this variable propagates to all the various components
+REGISTRY = DistributedObjectClassRegistry(
+    Avatar
+)
+
+
+class ChessClient(PastryClient):
+    registry = REGISTRY
+    account_id = str(uuid4())
+    game = None
+
+    def setup(self):
+        self.subscribe("grassy-field")
+        asyncio.ensure_future(self.run_panda())
+        self.game = World()
+
+    async def run_panda(self):
+        while True:
+            self.game.taskMgr.step()
+            await asyncio.sleep(1 / 60)  # 60 FPS
+
+    def object_created(self, obj):
+        print("created", obj)
+
+    def object_updated(self, obj):
+        print("updated", obj)
+
+    def object_deleted(self, obj):
+        print('deleted:', obj)
+
+
+class MovementAgent(PastryAgent):
+    registry = REGISTRY
+
+    log_color = "\033[93m"
+    log_name = "Agent"
+
+    def authenticate(self, *args, **kwargs):
+        # Right now, this is public
+        return True
+
+
+class MovementZone(PastryZone):
+    registry = REGISTRY
+    zone_id = "grassy-field"
+
+    log_color = "\033[92m"
+    log_name = "Zone"
+
+    def setup(self):
+        # White's perspective
+        # piece_order = (Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook)
+        # # Convenient kwargs
+        # white = {"color": "white", "zone": self.zone_id}
+        # black = {"color": "black", "zone": self.zone_id}
+        # pieces = (
+        #     [Pawn(square=i, **white) for i in range(8, 16)] +
+        #     [Pawn(square=i, **black) for i in range(48, 56)] +
+        #     [piece_order[i](square=i, **white) for i in range(8)] +
+        #     [piece_order[i](square=i + 56, **black) for i in range(8)]
+        # )
+        # self.save(*pieces)
+        pass
+
+    def client_connected(self, client_id):
+        print("connected", client_id)
+
+    def object_created(self, obj):
+        print("objects:", len(self.objects))
+
+    def object_updated(self, obj):
+        print("objects:", len(self.objects))
+
+    def object_deleted(self, obj):
+        print("objects:", len(self.objects))
+
+
+if __name__ == "__main__":
+    if 'server' in sys.argv:
+        to_start = MultiServer(MovementAgent, MovementZone)
+    elif 'client' in sys.argv:
+        to_start = ChessClient()
+    else:
+        raise ValueError("Must specify server or client in the command.")
+    to_start.run()

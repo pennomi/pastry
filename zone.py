@@ -60,6 +60,9 @@ class PastryZone(InternalMessagingServer):
     def object_deleted(self, obj: DistributedObject):
         pass
 
+    def client_connected(self, client_id):
+        pass
+
     def _handle_internal_message(self, channel, message):
         self.log("Received", channel)
 
@@ -74,7 +77,10 @@ class PastryZone(InternalMessagingServer):
         # TODO: Delete, Call, Leave
 
         elif channel.method == "join":
-            # Someone just joined! Let's sync down our zone's state.
+            # Someone just joined!
+            self.client_connected(message)
+
+            # Let's also sync down our zone's state.
             self.log("{} joined. Syncing server state ({} objects)".format(
                 message, len(self.objects)))
             for o in self.objects:
