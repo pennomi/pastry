@@ -35,20 +35,36 @@ class Avatar:
         self.nodepath.reparentTo(base.render)
 
         # Prepare animation state
-        self.model = Actor.Actor('models/Sinbad', {
+        self._model = Actor.Actor('models/Sinbad', {
             "runTop": "models/Sinbad-RunTop",
             "runBottom": "models/Sinbad-RunBase",
             "dance": "models/Sinbad-Dance.001",
             "idle": "models/Sinbad-IdleTop",
         })
-        self.model.setHprScale(180, 0, 0, .2, .2, .2)
-        self.model.reparentTo(self.nodepath)
+        bottom_parts = [
+            "Toe.L", "Toe.R",
+            "Foot.L", "Foot.R",
+            "Calf.L", "Calf.R",
+            "Thigh.L", "Thigh.R",
+            "Waist", "Root",
+        ]
+        # TODO: Finish Upper subparts list
+        top_parts = [
+            "Torso", "Chest", "Neck", "Head",
+            "Clavicle.L", "Clavicle.R",
+            "Ulna.L", "Ulna.R",
+            "Hand.L", "Hand.R",
+        ]
+        self._model.makeSubpart("top", top_parts, excludeJoints=bottom_parts)
+        self._model.makeSubpart("bottom", bottom_parts, excludeJoints=top_parts)
+        self._model.setHprScale(180, 0, 0, .2, .2, .2)
+        self._model.reparentTo(self.nodepath)
         self.stand()
 
         # show where the avatar is headed TODO: Use an arrow or something?
-        self.marker = base.loader.loadModel('models/Sinbad')
-        self.marker.reparentTo(base.render)
-        self.marker.setScale(.05, .05, .05)
+        self._marker = base.loader.loadModel('models/Sinbad')
+        self._marker.reparentTo(base.render)
+        self._marker.setScale(.05, .05, .05)
 
     def update(self):
         # Calculate the position I should be based off of speed and time
@@ -65,7 +81,7 @@ class Avatar:
         self.nodepath.setX(current_pos.x)
         self.nodepath.setY(current_pos.y)
 
-        # Update avatar z pos to snap to floor TODO: Move to avatar.update?
+        # Update avatar z pos to snap to floor
         origin = Point3(
             self.nodepath.getX(), self.nodepath.getY(), 5)
         direction = Vec3(0, 0, -1)
@@ -86,20 +102,16 @@ class Avatar:
         self.run()
 
         # Show a marker
-        self.marker.setPos(point)
+        self._marker.setPos(point)
 
     def run(self):
-        # TODO: Make Sinbad do half-body animations
-        # actor.makeSubpart("legs", ["Left Thigh", "Right Thigh"])
-        # actor.makeSubpart("torso", ["Head"], ["Left Thigh", "Right Thigh"])
-        # actor.loop("walk", partName="legs")
-        # actor.loop("reload", partName="torso")
-        if not self.model.getCurrentAnim() == 'runBottom':
-            self.model.loop('runBottom')
+        if self._model.getCurrentAnim() not in ["runTop", "runBottom"]:
+            self._model.loop("runTop", partName="top")
+            self._model.loop("runBottom", partName="bottom")
 
     def stand(self):
-        if not self.model.getCurrentAnim() == 'idle':
-            self.model.loop("idle")
+        if not self._model.getCurrentAnim() == 'idle':
+            self._model.loop("idle")
 
 
 class World(ShowBase):
