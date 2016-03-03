@@ -45,17 +45,18 @@ class InternalMessagingServer:
         self.channels.remove(channel_name)
         self._pubsub.punsubscribe("{}.*".format(channel_name))
 
-    def _redis_listen(self):
-        # TODO: Check if there's a better pattern for this
-        message = self._pubsub.get_message()
-        if message and not message['type'] == 'psubscribe':
-            channel = Channel.parse(message['channel'].decode('utf8'))
-            self._handle_internal_message(
-                channel, message['data'].decode('utf8'))
-        self._loop.call_later(0.001, self._redis_listen)
+    async def _redis_listen(self):
+        while True:
+            # TODO: Do all redis pieces need to run in an executor?
+            message = self._pubsub.get_message()
+            if message and not message['type'] == 'psubscribe':
+                channel = Channel.parse(message['channel'].decode('utf8'))
+                self._handle_internal_message(
+                    channel, message['data'].decode('utf8'))
+            await asyncio.sleep(0.001)
 
     def startup(self):
-        self._loop.call_soon(self._redis_listen)
+        asyncio.ensure_future(self._redis_listen())
 
     def shutdown(self):
         pass
@@ -63,6 +64,7 @@ class InternalMessagingServer:
     def run(self):
         self.startup()
         try:
+            # TODO: Should this loop not be defined on self?
             self._loop.run_forever()
         except KeyboardInterrupt:
             pass

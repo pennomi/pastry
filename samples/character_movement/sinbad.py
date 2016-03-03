@@ -42,5 +42,6 @@ class Sinbad:
             self._model.loop("runBottom", partName="bottom")
 
     def stand(self):
+        # TODO: Sometimes this isn't getting triggered properly
         if not self._model.getCurrentAnim() == 'idle':
             self._model.loop("idle")

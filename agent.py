@@ -21,8 +21,8 @@ class ClientConnection:
         # Otherwise I just check my zone subscriptions
         return channel.target in self.subscriptions
 
-    def kill(self):
-        pass  # TODO: Implement me! We need an easy way to kill off a client.
+    def kick(self):
+        pass  # TODO: Implement me! We need an easy way to kick a client.
 
     def __repr__(self):
         return "<Client {}>".format(self.writer.get_extra_info('peername'))
