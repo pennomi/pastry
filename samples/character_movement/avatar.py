@@ -1,5 +1,6 @@
 from panda3d.core import Point3, Vec3
 
+from samples.character_movement.objects import Character
 from samples.character_movement.panda_utils import RayPicker
 from samples.character_movement.sinbad import Sinbad
 from time import time as now
@@ -17,8 +18,12 @@ class Keyframe:
 class Avatar(Sinbad):
     speed = 3
 
-    def __init__(self, initial_position=Point3.zero()):
+    def __init__(self, distributed_object: Character, initial_position=Point3.zero()):
+        # Save the actual game object to this instance
+        self.do = distributed_object
+
         # TODO: Make into a list of keyframes to do waypoints
+        # TODO: And this kind of info should live on the DO
         self.start_kf = Keyframe(initial_position, time=now())
         self.end_kf = Keyframe(initial_position, time=now())
 

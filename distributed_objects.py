@@ -105,10 +105,15 @@ class DistributedObject(metaclass=DistributedObjectMetaclass):
 
 class DistributedObjectClassRegistry:
     def __init__(self, *args):
-        # TODO: Validate these are actually DO subclasses
+        # Validate these are actually DO subclasses
+        if any(not issubclass(_, DistributedObject) for _ in args):
+            raise TypeError("Only DistributedObject subclasses allowed.")
+
+        # Save them to the classes  TODO: Why not a dict?
         self._classes = args
 
     def __getitem__(self, classname: str):
+        """Provide index access for class retrieval."""
         for i in self._classes:
             if i.__name__ == classname:
                 return i

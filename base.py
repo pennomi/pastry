@@ -17,7 +17,7 @@ class InternalMessagingServer:
 
     def log(self, *messages):
         message = " ".join(str(m) for m in messages)
-        print("{c}\033[1m{n: <10}\033[0m{m}".format(
+        print("{c}\033[1m{n: <16}\033[0m{m}".format(
             c=self.log_color, n=self.log_name, m=message))
 
     def _init_redis(self):

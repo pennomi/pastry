@@ -1,4 +1,6 @@
 import json
+from typing import List
+
 from base import InternalMessagingServer
 from distributed_objects import DistributedObjectState, DistributedObject
 from util import Channel
@@ -16,11 +18,11 @@ class PastryZone(InternalMessagingServer):
 
         # Check that registry is set up
         if not self.registry:
-            raise NotImplementedError("`registry` must be on zone subclasses")
+            raise AttributeError("`registry` must be on zone subclasses")
 
         # Always listen for itself.
         if not self.zone_id:
-            raise NotImplementedError("Must have a zone_id on the zone server")
+            raise AttributeError("Must have a zone_id on the zone server")
         self.internal_subscribe(self.zone_id)
 
         # Set up the object state tracking
@@ -30,7 +32,7 @@ class PastryZone(InternalMessagingServer):
         # Run any game-specific logic
         self.setup()
 
-    def save(self, *objects):
+    def save(self, *objects: List[DistributedObject]):
         for o in objects:
             method = "update" if o.created else "create"
 
@@ -60,7 +62,7 @@ class PastryZone(InternalMessagingServer):
     def object_deleted(self, obj: DistributedObject):
         pass
 
-    def client_connected(self, client_id):
+    def client_connected(self, client_id: str):
         pass
 
     def _handle_internal_message(self, channel, message):
