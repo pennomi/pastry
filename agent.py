@@ -27,7 +27,8 @@ class ClientConnection:
         pass  # TODO: Implement me! We need an easy way to kick a client.
 
     def __repr__(self):
-        return "<Client {}>".format(self.writer.get_extra_info('peername'))
+        host, port = self.writer.get_extra_info('peername')
+        return "<Client {}:{}>".format(host, port)
 
 
 class PastryAgent(InternalMessagingServer):
