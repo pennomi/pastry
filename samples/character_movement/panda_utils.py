@@ -2,7 +2,7 @@ from direct.showbase.DirectObject import DirectObject
 from panda3d.core import CollisionRay, CollisionTraverser, GeomNode, \
     CollisionNode, Point3, Vec3, CompassEffect, CollisionHandlerQueue, Point2
 from direct.task import Task
-from direct.interval import LerpInterval as LERP
+from direct.interval import LerpInterval
 
 
 class RayPicker:
@@ -123,7 +123,7 @@ class EdgeScreenTracker(DirectObject):
     def rotate_camera(self, arc):
         newP = clamp(self.target.getP() - arc.getY(), self.pitch_limits)
         newH = self.target.getH() + arc.getX()  # Not clamped, just added.
-        LERP.LerpHprInterval(
+        LerpInterval.LerpHprInterval(
             self.target, self.speed, Vec3(newH, newP, self.target.getR())
         ).start()
 

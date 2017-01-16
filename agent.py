@@ -132,7 +132,7 @@ class PastryAgent(InternalMessagingServer):
                 await self._handle_client_message(sender, channel, message)
 
     async def _handle_client_message(self, sender: ClientConnection,
-                               channel: Channel, message: str):
+                                     channel: Channel, message: str):
         # TODO: This should receive channels too?
         # Subscription requests are already handled; must be a
         # DistributedObject create/update/delete/call.
@@ -143,14 +143,16 @@ class PastryAgent(InternalMessagingServer):
         # to send channel data too
 
         # Handle an update message
-        kwargs = json.loads(message)
+        # TODO: Need to validate stuff
+        # kwargs = json.loads(message)
         self.internal_broadcast(channel, message)
 
     def _handle_internal_message(self, channel, message):
         """Whenever the agent receives an internal message, it's forwarded
         to all relevant clients.
         """
-        asyncio.ensure_future(self.client_broadcast(channel, message), loop=self._loop)
+        asyncio.ensure_future(self.client_broadcast(channel, message),
+                              loop=self._loop)
 
     async def client_broadcast(self, channel: Channel, data: str):
         connections = [c for c in self.connections if c.responds_to(channel)]
