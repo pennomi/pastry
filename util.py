@@ -28,12 +28,13 @@ class Channel:
     """
     def __init__(self, *, target: str=None, method=None, code_name=None):
         """
-        :param target: Either the zone or the user ID.
-        :param method: Used to determine what is taking place
-        :param code_name: Only used in "create" channels (to pick a class
-        from the registry) and in "call" channels (to pick the method that
-        should be executed)
+        target: Either the zone or the user ID.
+        method: Used to determine what is taking place
+        code_name: Only used in "create" channels (to pick a class
+           from the registry) and in "call" channels (to pick the method that
+           should be executed)
         """
+        # TODO: code_name should be named something else
         self.target = target
         self.method = method
         self.code_name = code_name

@@ -23,8 +23,10 @@ REGISTRY = DistributedObjectClassRegistry(
 
 class MovementClient(PastryClient):
     registry = REGISTRY
-    account_id = str(uuid4())
     game = None
+
+    # TODO: Make this a normal client feature
+    # async def authenticate(self, credentials):
 
     def setup(self):
         self.subscribe("overworld")
@@ -35,8 +37,9 @@ class MovementClient(PastryClient):
         print("created", obj)
         new_avatar = Avatar(obj, self)
         self.game.avatars.append(new_avatar)
-        if len(self.game.avatars) == 1:
-            self.game.bind_camera()
+        # TODO: Once I can get my own id
+        if self.id == obj.owner:
+            self.game.bind_camera(new_avatar)
 
     def object_updated(self, obj):
         print("updated", obj)
@@ -57,9 +60,9 @@ class MovementAgent(PastryAgent):
     log_color = "\033[93m"
     log_name = "Agent"
 
-    def authenticate(self, *args, **kwargs):
-        # Right now, this is public
-        return True
+    # async def authenticate(self, *args, **kwargs):
+    #     # Right now, this is public, and just make up some connection info.
+    #     return uuid4()
 
 
 class MovementZone(PastryZone):
@@ -75,7 +78,7 @@ class MovementZone(PastryZone):
 
     def client_connected(self, client_id: str):
         self.log("connected", client_id)
-        new_player = Character(zone=self.zone_id)
+        new_player = Character(zone=self.zone_id, owner=client_id)
         self.avatars.append(new_player)
         self.save(new_player)
 

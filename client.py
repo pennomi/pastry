@@ -1,5 +1,7 @@
 import asyncio
 import json
+from typing import List
+
 from distributed_objects import DistributedObjectState, DistributedObject
 from settings import MAX_PACKET_SIZE
 from util import Channel
@@ -11,6 +13,7 @@ class PastryClient:
     _writer = None
     finished = False
     registry = None
+    id = None  # TODO: Don't permit network (except auth) until this is a thing
 
     def __init__(self, loop=None):
         if not loop:
@@ -18,6 +21,15 @@ class PastryClient:
         self._loop = loop
         self.objects = DistributedObjectState(
             self.object_created, self.object_updated, self.object_deleted)
+
+    async def authenticate(self, credentials):
+        """No messages can be sent back and forth until this is completed."""
+        print("AUTHENTICATING")
+        # Auth doesn't use the standard _send because it's not pubsub
+        self._writer.write(json.dumps(credentials).encode() + b'\n')
+        response = await self._reader.readline()
+        self.id = response.decode().strip()
+        print("My ID is now", self.id)
 
     def setup(self):
         raise NotImplementedError()
@@ -32,7 +44,7 @@ class PastryClient:
     def object_deleted(self, distributed_object: DistributedObject):
         pass
 
-    def save(self, *objects: DistributedObject):
+    def save(self, *objects: List[DistributedObject]):
         """Takes a list of distributed objects and sends them across the
         network to be saved.
         """
@@ -84,7 +96,12 @@ class PastryClient:
         # Establish the socket
         self._reader, self._writer = await asyncio.open_connection(
             '127.0.0.1', 8888, loop=self._loop)
+
         # TODO: Authentication
+        credentials = {"cool": "beans"}
+        print("Attempting to authenticate")
+        await self.authenticate(credentials)
+
         # Schedule any worker tasks
         asyncio.ensure_future(self.receive(), loop=self._loop)
         self.setup()
@@ -115,7 +132,7 @@ class PastryClient:
                     message = json.loads(m.decode('utf8'))
                     c = Channel.parse(message['channel'])
                     self._handle_message(c, message['data'])
-                except ValueError as e:
+                except ValueError:
                     # Didn't get the full message, save for next time.
                     leftovers = m
 

@@ -16,6 +16,8 @@ Screen edges: Rotate camera
 
 
 class Game(ShowBase):
+    my_avatar = None
+
     def __init__(self):
         super().__init__()
 
@@ -24,7 +26,7 @@ class Game(ShowBase):
             text="Pastry Tutorial - Character Movement",
             style=1, fg=(1, 1, 1, 1), shadow=(0, 0, 0, 1),
             pos=(0.7, -0.95), scale=.07)
-        self.escape_text = OnscreenText(
+        self.instruction_text = OnscreenText(
             text=INSTRUCTION_TEXT,
             parent=self.a2dTopLeft, align=TextNode.ALeft,
             style=1, fg=(1, 1, 1, 1), pos=(0.06, -0.1), scale=.05)
@@ -44,8 +46,9 @@ class Game(ShowBase):
         # start the game loop  TODO asyncio
         self.taskMgr.add(self.game_loop, "game_loop")
 
-    def bind_camera(self):
-        EdgeScreenTracker(self.avatars[0].nodepath, Point3(0, 0, 1))
+    def bind_camera(self, avatar):
+        self.my_avatar = avatar
+        EdgeScreenTracker(avatar.nodepath, Point3(0, 0, 1))
 
     def on_click(self):
         """Handle the click event."""
@@ -54,7 +57,9 @@ class Game(ShowBase):
             condition=lambda o: o.getName() == 'Plane')
         if not point:
             return
-        self.avatars[0].set_destination(point)
+
+        if self.my_avatar:
+            self.my_avatar.set_destination(point)
 
     def game_loop(self, task):
         for a in self.avatars:

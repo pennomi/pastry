@@ -1,6 +1,7 @@
 import asyncio
 import json
 from uuid import uuid4
+
 from base import InternalMessagingServer
 from settings import MAX_PACKET_SIZE
 from util import Channel
@@ -9,8 +10,9 @@ from util import Channel
 class ClientConnection:
     """Represents all the data pertaining to one client."""
     def __init__(self, r, w):
-        # Upon connection, we assign this person a UUID.
-        self.id = str(uuid4())
+        # The client connection should not read or write data if it has no id
+        # (except for authentication)
+        self.id = None
         self.reader, self.writer = r, w
         self.subscriptions = []
 
@@ -39,8 +41,16 @@ class PastryAgent(InternalMessagingServer):
     connections = []
     finished = False
 
-    def authenticate(self, *args, **kwargs) -> bool:
-        raise NotImplementedError()
+    async def authenticate(self, connection: ClientConnection) -> str:
+        """Validate credentials and return the client id."""
+        # raise NotImplementedError()
+        self.log("authenticating")
+        data = await connection.reader.readline()
+        self.log(data)
+        client_token = uuid4()
+        self.log("generating token:", client_token)
+        connection.writer.write(str(client_token).encode() + b'\n')
+        return str(client_token)
 
     def startup(self):
         coroutine = asyncio.start_server(
@@ -72,9 +82,13 @@ class PastryAgent(InternalMessagingServer):
         connection = ClientConnection(reader, writer)
         self.connections.append(connection)
 
-        # TODO: Authenticate
-        if not self.authenticate():
+        # TODO: Finish authentication process
+        self.log("I want to authenticate!!!")
+        client_id = await self.authenticate(connection)
+        self.log("Got some stuff for auth", client_id)
+        if not client_id:
             self.finished = True
+        connection.id = client_id
 
         # Sign up for internal private messages for this user
         self.internal_subscribe(connection.id)
@@ -98,6 +112,7 @@ class PastryAgent(InternalMessagingServer):
         self.connections.remove(connection)
 
     async def _read_message(self, sender: ClientConnection, data: bytes):
+        self.log(data)
         for d in [_ for _ in data.split(b'\n') if _]:
             # Decode the message
             raw_message = d.decode('utf8')
@@ -133,6 +148,7 @@ class PastryAgent(InternalMessagingServer):
 
     async def _handle_client_message(self, sender: ClientConnection,
                                      channel: Channel, message: str):
+        # TODO: Why async?
         # TODO: This should receive channels too?
         # Subscription requests are already handled; must be a
         # DistributedObject create/update/delete/call.
