@@ -33,13 +33,14 @@ class MovementClient(PastryClient):
 
     def object_created(self, obj):
         print("created", obj)
-        new_avatar = Avatar(obj)
+        new_avatar = Avatar(obj, self)
         self.game.avatars.append(new_avatar)
         if len(self.game.avatars) == 1:
             self.game.bind_camera()
 
     def object_updated(self, obj):
         print("updated", obj)
+        obj.avatar.move()
 
     def object_deleted(self, obj):
         print('deleted:', obj)
@@ -73,20 +74,23 @@ class MovementZone(PastryZone):
         self.avatars = []
 
     def client_connected(self, client_id: str):
-        print("connected", client_id)
+        self.log("connected", client_id)
         new_player = Character(zone=self.zone_id)
         self.avatars.append(new_player)
         self.save(new_player)
-        print("Whaaaaat")
+
+    def client_disconnected(self, client_id: str):
+        # TODO: Is this even a thing?
+        pass
 
     def object_created(self, obj):
-        print("objects:", len(self.objects))
+        self.log("objects:", len(self.objects))
 
     def object_updated(self, obj):
-        print("objects:", len(self.objects))
+        self.log("updated:", obj)
 
     def object_deleted(self, obj):
-        print("objects:", len(self.objects))
+        self.log("objects:", len(self.objects))
 
 
 if __name__ == "__main__":

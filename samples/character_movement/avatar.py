@@ -1,5 +1,7 @@
 from panda3d.core import Point3, Vec3
+from weakref import proxy
 
+from client import PastryClient
 from samples.character_movement.objects import Character
 from samples.character_movement.panda_utils import RayPicker
 from samples.character_movement.sinbad import Sinbad
@@ -18,9 +20,15 @@ class Keyframe:
 class Avatar(Sinbad):
     speed = 3
 
-    def __init__(self, distributed_object: Character, initial_position=Point3.zero()):
+    def __init__(self, distributed_object: Character, host: PastryClient):
+        self.host = proxy(host)
+
         # Save the actual game object to this instance
         self.do = distributed_object
+        self.do.avatar = proxy(self)
+        print(self.do.destination)
+        # TODO: Make this the keyframe beginning
+        initial_position = Point3.zero()
 
         # TODO: Make into a list of keyframes to do waypoints
         # TODO: And this kind of info should live on the DO
@@ -55,13 +63,23 @@ class Avatar(Sinbad):
             condition=lambda o: o.getName() == 'Plane')
         self.nodepath.setPos(point)
 
-    def set_destination(self, point):
+    def set_destination(self, point: Point3):
+        self.do.destination = tuple(point)
+        print(self.do.destination)
+        # TODO: What if save didn't take args and just sent all dirty objects?
+        self.host.save(self.do)
+
+    def move(self):
+        point = Point3(*self.do.destination)
+
+        # TODO: Move this logic to the zone server
         # Calculate the keyframes
         ds = point - self.nodepath.get_pos()
         arrival_seconds = ds.length() / self.speed
         self.start_kf = Keyframe(self.nodepath.get_pos())
         self.end_kf = Keyframe(point, now() + arrival_seconds)
 
+        # TODO: And make this a response to the movement change
         # Now visually make the character move
         self.nodepath.lookAt(point)
         self.nodepath.setP(0)

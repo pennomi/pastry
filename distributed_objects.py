@@ -80,6 +80,9 @@ class DistributedObject(metaclass=DistributedObjectMetaclass):
         # Must also have a zone. But we can't generate this one.
         assert self.zone, "DO must have a zone."
 
+    def __repr__(self):
+        return "<{} {}>".format(self.__class__.__name__, self.id)
+
     @property
     def created(self) -> bool:
         # This is only new is saved fields are not yet initialized

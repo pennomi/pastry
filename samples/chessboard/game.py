@@ -138,13 +138,13 @@ class ChessboardDemo(ShowBase):
         # Handle the from model
         fr_model.setPos(square_pos(to))
         fr_do.square = to
-        self.client.save(fr_do)
+        self.client._save(fr_do)
 
         # Handle the to model if it exists
         if to_do:
             to_model.setPos(square_pos(fr))
             to_do.square = fr
-            self.client.save(to_do)
+            self.client._save(to_do)
 
     def mouseTask(self, task):
         # This task deals with the highlighting and dragging based on the mouse
