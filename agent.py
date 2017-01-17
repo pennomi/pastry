@@ -1,6 +1,5 @@
 import asyncio
 import json
-from uuid import uuid4
 
 from base import InternalMessagingServer
 from settings import MAX_PACKET_SIZE
@@ -17,6 +16,7 @@ class ClientConnection:
         self.subscriptions = []
 
     def responds_to(self, channel: Channel) -> bool:
+        """Return whether or not the client is listening to this channel."""
         # I always am interested in myself
         if channel.target == self.id:
             return True
@@ -24,6 +24,7 @@ class ClientConnection:
         return channel.target in self.subscriptions
 
     def kick(self):
+        """Terminate this client connection."""
         pass  # TODO: Implement me! We need an easy way to kick a client.
 
     def __repr__(self):
@@ -42,18 +43,27 @@ class PastryAgent(InternalMessagingServer):
     connections = []
     finished = False
 
-    async def authenticate(self, connection: ClientConnection) -> str:
+    async def _authenticate(self, connection: ClientConnection) -> str:
         """Validate credentials and return the client id."""
-        # raise NotImplementedError()
-        self.log("authenticating")
+        # Wait for the client to send credentials
+        self.log("Waiting for authentication from", connection)
         data = await connection.reader.readline()
-        self.log(data)
-        client_token = uuid4()
-        self.log("generating token:", client_token)
-        connection.writer.write(str(client_token).encode() + b'\n')
-        return str(client_token)
+        credentials = json.loads(data.decode())
+
+        # Let the subclass decide if this the credentials are valid
+        client_id = await self.validate_credentials(credentials)
+
+        # Send the client its new id
+        connection.writer.write(str(client_id).encode() + b'\n')
+        return str(client_id)
+
+    async def validate_credentials(self, credentials: dict) -> str:
+        """To be overridden by the subclass"""
+        raise NotImplementedError()
 
     def startup(self):
+        """Run the server loop and begin accepting connections."""
+        # TODO: Move host:port to an argument?
         coroutine = asyncio.start_server(
             self._create_client_connection, '127.0.0.1', 8888, loop=self._loop)
         self.server = self._loop.run_until_complete(coroutine)
@@ -84,9 +94,7 @@ class PastryAgent(InternalMessagingServer):
         self.connections.append(connection)
 
         # TODO: Finish authentication process
-        self.log("I want to authenticate!!!")
-        client_id = await self.authenticate(connection)
-        self.log("Got some stuff for auth", client_id)
+        client_id = await self._authenticate(connection)
         if not client_id:
             self.finished = True
         connection.id = client_id
@@ -108,12 +116,17 @@ class PastryAgent(InternalMessagingServer):
             # Handle the message
             await self._read_message(connection, msg)
 
+        # Cleanup
         self.log("Close the socket for {}".format(connection))
         writer.close()
+        # Tell all relevant servers that the client has left
+        for zone in connection.subscriptions:
+            channel = Channel(target=zone, method="leave")
+            self.internal_broadcast(channel, connection.id)
+        self.internal_unsubscribe(connection.id)
         self.connections.remove(connection)
 
     async def _read_message(self, sender: ClientConnection, data: bytes):
-        self.log(data)
         for d in [_ for _ in data.split(b'\n') if _]:
             # Decode the message
             raw_message = d.decode('utf8')
@@ -144,6 +157,7 @@ class PastryAgent(InternalMessagingServer):
                 # TODO: Trigger a delete state for the leaver
                 self.internal_broadcast(channel, sender.id)
             else:
+                self.log("Some other message", sender, "from", d)
                 # This is a non-pubsub message; forward to the do handler
                 await self._handle_client_message(sender, channel, message)
 

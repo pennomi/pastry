@@ -34,7 +34,12 @@ class PastryZone(InternalMessagingServer):
 
     def save(self, *objects: List[DistributedObject]):
         for o in objects:
-            method = "update" if o.created else "create"
+            if o._deleted:
+                method = "delete"
+            elif o.created:
+                method = "update"
+            else:
+                method = "create"
 
             # Build the channel
             c = Channel(target=o.zone, method=method,
@@ -43,6 +48,10 @@ class PastryZone(InternalMessagingServer):
             # Add it locally immediately
             if method == "create":
                 self.objects.create(o)
+
+            # Or remove it
+            if method == "delete":
+                self.objects.delete(o.id)
 
             # Send via the network
             self.internal_broadcast(c, o.serialize(
@@ -65,6 +74,9 @@ class PastryZone(InternalMessagingServer):
     def client_connected(self, client_id: str):
         pass
 
+    def client_disconnected(self, client_id: str):
+        pass
+
     def _handle_internal_message(self, channel, message):
         self.log("Received", channel)
 
@@ -76,7 +88,7 @@ class PastryZone(InternalMessagingServer):
         elif channel.method == "update":
             kwargs = json.loads(message)
             obj = self.objects.update(**kwargs)
-        # TODO: Delete, Call, Leave
+        # TODO: Delete, Call
 
         elif channel.method == "join":
             # Someone just joined!
@@ -92,3 +104,7 @@ class PastryZone(InternalMessagingServer):
                     code_name=o.__class__.__name__)
                 self.internal_broadcast(
                     output_channel, o.serialize(for_create=True))
+
+        elif channel.method == "leave":
+            # Someone just left!
+            self.client_disconnected(message)

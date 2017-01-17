@@ -63,7 +63,7 @@ class ChessAgent(PastryAgent):
     log_color = "\033[93m"
     log_name = "Agent"
 
-    def authenticate(self, *args, **kwargs):
+    def _authenticate(self, *args, **kwargs):
         # Right now, this is public
         return True
 

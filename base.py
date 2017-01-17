@@ -49,7 +49,7 @@ class InternalMessagingServer:
         while True:
             # TODO: Do all redis pieces need to run in an executor?
             message = self._pubsub.get_message()
-            if message and not message['type'] == 'psubscribe':
+            if message and message['type'] not in ['psubscribe', 'punsubscribe']:
                 channel = Channel.parse(message['channel'].decode('utf8'))
                 self._handle_internal_message(
                     channel, message['data'].decode('utf8'))

@@ -22,26 +22,26 @@ class PastryClient:
         self.objects = DistributedObjectState(
             self.object_created, self.object_updated, self.object_deleted)
 
-    async def authenticate(self, credentials):
-        """No messages can be sent back and forth until this is completed."""
-        print("AUTHENTICATING")
+    async def _authenticate(self, credentials):
+        """No messages should be sent back and forth until this is completed."""
+        print("Authenticating...")
         # Auth doesn't use the standard _send because it's not pubsub
         self._writer.write(json.dumps(credentials).encode() + b'\n')
         response = await self._reader.readline()
         self.id = response.decode().strip()
-        print("My ID is now", self.id)
+        print("Authentication successful. Client ID:", self.id)
 
-    def setup(self):
+    def setup(self) -> None:
         raise NotImplementedError()
 
     # These are to be overridden by the implementer of the Client
-    def object_created(self, distributed_object: DistributedObject):
+    def object_created(self, distributed_object: DistributedObject) -> None:
         pass
 
-    def object_updated(self, distributed_object: DistributedObject):
+    def object_updated(self, distributed_object: DistributedObject) -> None:
         pass
 
-    def object_deleted(self, distributed_object: DistributedObject):
+    def object_deleted(self, distributed_object: DistributedObject) -> None:
         pass
 
     def save(self, *objects: List[DistributedObject]):
@@ -71,6 +71,9 @@ class PastryClient:
         elif channel.method == 'update':
             kwargs = json.loads(data)
             self.objects.update(**kwargs)
+        elif channel.method == 'delete':
+            obj_id = json.loads(data)['id']
+            self.objects.delete(obj_id)
 
     # Core Functions
     def subscribe(self, channel_name: str):
@@ -100,7 +103,7 @@ class PastryClient:
         # TODO: Authentication
         credentials = {"cool": "beans"}
         print("Attempting to authenticate")
-        await self.authenticate(credentials)
+        await self._authenticate(credentials)
 
         # Schedule any worker tasks
         asyncio.ensure_future(self.receive(), loop=self._loop)

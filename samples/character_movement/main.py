@@ -25,21 +25,20 @@ class MovementClient(PastryClient):
     registry = REGISTRY
     game = None
 
-    # TODO: Make this a normal client feature
-    # async def authenticate(self, credentials):
-
     def setup(self):
         self.subscribe("overworld")
         asyncio.ensure_future(self.run_panda())
         self.game = Game()
 
     def object_created(self, obj):
-        print("created", obj)
-        new_avatar = Avatar(obj, self)
-        self.game.avatars.append(new_avatar)
-        # TODO: Once I can get my own id
-        if self.id == obj.owner:
-            self.game.bind_camera(new_avatar)
+        # TODO: This is a kinda sucky pattern
+        if isinstance(obj, Character):
+            new_avatar = Avatar(obj, self)
+            self.game.avatars.append(new_avatar)
+            if self.id == obj.owner:
+                self.game.bind_camera(new_avatar)
+        else:
+            print("Unhandled object", obj)
 
     def object_updated(self, obj):
         print("updated", obj)
@@ -55,45 +54,51 @@ class MovementClient(PastryClient):
 
 
 class MovementAgent(PastryAgent):
+    """The most basic agent that's possible."""
     registry = REGISTRY
 
     log_color = "\033[93m"
     log_name = "Agent"
 
-    # async def authenticate(self, *args, **kwargs):
-    #     # Right now, this is public, and just make up some connection info.
-    #     return uuid4()
+    async def validate_credentials(self, credentials: dict) -> str:
+        """Skip authentication and just return a random client ID."""
+        return uuid4()
 
 
 class MovementZone(PastryZone):
+    """Keep track of connected people and sync their movement state."""
     registry = REGISTRY
     zone_id = "overworld"
 
     log_color = "\033[92m"
     log_name = "Overworld Zone"
-    avatars = []
+    characters = []
 
     def setup(self):
-        self.avatars = []
+        self.characters = []
 
-    def client_connected(self, client_id: str):
+    def client_connected(self, client_id: str) -> None:
         self.log("connected", client_id)
         new_player = Character(zone=self.zone_id, owner=client_id)
-        self.avatars.append(new_player)
+        self.characters.append(new_player)
         self.save(new_player)
 
-    def client_disconnected(self, client_id: str):
+    def client_disconnected(self, client_id: str) -> None:
+        """Remove the character belonging to the client because they left."""
         # TODO: Is this even a thing?
-        pass
+        for c in self.characters:
+            if c.owner == client_id:
+                c._delete()
+                self.save(c)
 
     def object_created(self, obj):
-        self.log("objects:", len(self.objects))
+        self.log("created:", len(self.objects))
 
     def object_updated(self, obj):
         self.log("updated:", obj)
 
     def object_deleted(self, obj):
-        self.log("objects:", len(self.objects))
+        self.log("deleted:", len(self.objects))
 
 
 if __name__ == "__main__":

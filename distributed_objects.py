@@ -1,3 +1,8 @@
+# coding=utf-8
+"""Contains the metaclass and basic DistributedObject from which all game
+objects would inherit.
+"""
+
 import json
 from uuid import uuid4
 
@@ -8,6 +13,7 @@ class Field:
 
 
 class DistributedObjectMetaclass(type):
+    """Scan the class for Fields and track those values meticulously."""
     def __new__(mcs, classname, baseclasses, attrs):
         # TODO: Why not put saved data in __dict__?
         attrs['_saved_field_data'] = {}  # This is where synced data go
@@ -67,6 +73,9 @@ class DistributedObject(metaclass=DistributedObjectMetaclass):
 
     def __init__(self, *, zone=None, **kwargs):
         super().__init__()
+        # Set the deleted flag
+        self._deleted = False
+
         # Copy so they're not shared between all instances
         self._dirty_field_data = self._dirty_field_data.copy()
         self._saved_field_data = self._saved_field_data.copy()
@@ -91,6 +100,9 @@ class DistributedObject(metaclass=DistributedObjectMetaclass):
     def _update(self, data: dict) -> None:
         # TODO: Nuke any keys in the dirty data that exist here?
         self._saved_field_data.update(data)
+
+    def _delete(self) -> None:
+        self._deleted = True
 
     def _save(self) -> None:
         self._saved_field_data.update(self._dirty_field_data)

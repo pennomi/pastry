@@ -52,7 +52,7 @@ class ChatAgent(PastryAgent):
     log_color = "\033[93m"
     log_name = "Agent"
 
-    def authenticate(self, *args, **kwargs):
+    def _authenticate(self, *args, **kwargs):
         # TODO: I think this should return the user's token? Ideally, that's
         # never disclosed.
         return True
