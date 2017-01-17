@@ -46,6 +46,11 @@ class MovementClient(PastryClient):
 
     def object_deleted(self, obj):
         print('deleted:', obj)
+        for a in self.game.avatars:
+            if a.do == obj:
+                self.game.avatars.remove(a)
+                a._marker.removeNode()
+                a._model.removeNode()
 
     async def run_panda(self):
         while True:
