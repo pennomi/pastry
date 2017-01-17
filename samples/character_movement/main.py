@@ -1,6 +1,9 @@
-# ROADMAP
-# * Multiplayer via Pastry
-# * Enhancement: Queueing of path keyframes
+# coding=utf-8
+"""
+This sample shows how to use keyframe-based movement for characters within a
+scene.
+ * Enhancement: Queueing of path keyframes
+"""
 import asyncio
 import sys
 from uuid import uuid4
@@ -22,6 +25,7 @@ REGISTRY = DistributedObjectClassRegistry(
 
 
 class MovementClient(PastryClient):
+    """Allow connections to the game."""
     registry = REGISTRY
     game = None
 

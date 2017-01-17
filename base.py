@@ -1,9 +1,17 @@
+# coding=utf-8
+"""The internal messaging server is the base class for all pubsub-based servers.
+Specifically, this means the Agent and Zone servers.
+"""
+
 import asyncio
 import redis
 from util import Channel
 
 
 class InternalMessagingServer:
+    """InternalMessagingServers connect to Redis pubsub and maintain a list of
+    interested channels.
+    """
     log_color = "\033[94m"
     log_name = "Unknown"
     server = None

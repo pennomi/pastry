@@ -149,7 +149,6 @@ class DistributedObjectState:
 
     def create(self, obj: DistributedObject):
         # TODO: Should the actual packet parsing happen here too?
-
         # If the object already exists, just update it
         to_update = self.get(obj.id)
         if to_update:
@@ -161,6 +160,9 @@ class DistributedObjectState:
         obj._save()
 
     def update(self, **fields: dict):
+        # TODO: What if the object doesn't exist? Any reason why this and
+        # TODO: create can't be merged? They will still make the create/update
+        # TODO: callbacks contextually
         obj_id = fields['id']  # ID is always serialized
         obj = self[obj_id]
         obj._update(fields)

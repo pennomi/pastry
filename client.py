@@ -1,3 +1,6 @@
+# coding=utf-8
+"""The Client is the user-facing portion of the architecture."""
+
 import asyncio
 import json
 from typing import List
@@ -8,6 +11,9 @@ from util import Channel
 
 
 class PastryClient:
+    """The base client loop. This is responsible for authentication and
+    sending/receiving distributed object changes.
+    """
     _loop = None
     _reader = None
     _writer = None
@@ -32,7 +38,7 @@ class PastryClient:
         print("Authentication successful. Client ID:", self.id)
 
     def setup(self) -> None:
-        raise NotImplementedError()
+        pass
 
     # These are to be overridden by the implementer of the Client
     def object_created(self, distributed_object: DistributedObject) -> None:

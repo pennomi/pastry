@@ -1,3 +1,9 @@
+# coding=utf-8
+"""The Agent is responsible for being the gateway between the internal servers
+and the external clients. Because of this it also is responsible for enforcing
+permissions and authentication.
+"""
+
 import asyncio
 import json
 

@@ -1,3 +1,5 @@
+# coding=utf-8
+"""The Zone server handles the logic for a specific vertical of gameplay."""
 import json
 from typing import List
 
