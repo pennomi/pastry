@@ -41,15 +41,18 @@ class InternalMessagingServer:
         raise NotImplementedError()
 
     def internal_broadcast(self, channel: Channel, message: str):
+        """Send a message to on a channel to all internal listeners."""
         self._redis.publish(str(channel), message)
 
     def internal_subscribe(self, channel_name: str):
-        self.log("Registering", channel_name)
+        """Start listening to a Redis pubsub channel."""
+        self.log("Subscribing", channel_name)
         self.channels.append(channel_name)
         self._pubsub.psubscribe("{}.*".format(channel_name))
 
     def internal_unsubscribe(self, channel_name: str):
-        self.log("Unregistering", channel_name)
+        """Stop listening to a Redis pubsub channel."""
+        self.log("Unsubscribing", channel_name)
         self.channels.remove(channel_name)
         self._pubsub.punsubscribe("{}.*".format(channel_name))
 

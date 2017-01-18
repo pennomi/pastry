@@ -35,6 +35,10 @@ class PastryZone(InternalMessagingServer):
         self.setup()
 
     def save(self, *objects: List[DistributedObject]):
+        """Save one or more distributed objects, sending those changes through
+        the network.
+        """
+        # TODO: This pattern is cumbersome. How else could it be implemented?
         for o in objects:
             if o._deleted:
                 method = "delete"
@@ -51,7 +55,7 @@ class PastryZone(InternalMessagingServer):
             if method == "create":
                 self.objects.create(o)
 
-            # Or remove it
+            # Or remove it immediately
             if method == "delete":
                 self.objects.delete(o.id)
 
@@ -65,18 +69,23 @@ class PastryZone(InternalMessagingServer):
         pass
 
     def object_created(self, obj: DistributedObject):
+        """Callback for object creation, to be implemented by a subclass."""
         pass
 
     def object_updated(self, obj: DistributedObject):
+        """Callback for object updates, to be implemented by a subclass."""
         pass
 
     def object_deleted(self, obj: DistributedObject):
+        """Callback for object deletion, to be implemented by a subclass."""
         pass
 
     def client_connected(self, client_id: str):
+        """Callback for client connection, to be implemented by a subclass."""
         pass
 
     def client_disconnected(self, client_id: str):
+        """Callback for client disconnect, to be implemented by a subclass."""
         pass
 
     def _handle_internal_message(self, channel, message):
@@ -89,7 +98,7 @@ class PastryZone(InternalMessagingServer):
 
         elif channel.method == "update":
             kwargs = json.loads(message)
-            obj = self.objects.update(**kwargs)
+            self.objects.update(**kwargs)
         # TODO: Delete, Call
 
         elif channel.method == "join":
